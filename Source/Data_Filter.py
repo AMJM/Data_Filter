@@ -1,5 +1,6 @@
 import pandas as pd
 import math as m
+import matplotlib.pyplot as plt
 
 
 class Point:
@@ -7,12 +8,38 @@ class Point:
         self.x = x
         self.y = y
 
+
+class Velocity:
+    def __init__(self, stop, dead_slow, slow, half, full):
+        self.stop = stop
+        self.dead_slow = dead_slow
+        self.slow = slow
+        self.half = half
+        self.full = full
+
+    def discrete_range(self):
+        v0 = -self.full * 1.5
+        v1 = -(self.half + self.full) / 2
+        v2 = -(self.slow + self.half) / 2
+        v3 = -(self.dead_slow + self.slow) / 2
+        v4 = -(self.stop + self.dead_slow) / 2
+        v5 = (self.stop + self.dead_slow) / 2
+        v6 = (self.dead_slow + self.slow) / 2
+        v7 = (self.slow + self.half) / 2
+        v8 = (self.half + self.full) / 2
+        v9 = self.full * 1.5
+        return [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9]
+
 class Ship():
-    def __init__(self, name, beam, height, length):
+    def __init__(self, name, beam, height, length, velocity):
         self.name = name
         self.beam = beam
         self.height = height
         self.length = length
+        self.velocity = velocity
+
+    def discrete_velocity(self):
+        return self.velocity.discrete_range()
 
     def calc_dist(self, center, angle, buoys, target):
         # Coordenadas medias frontal e traseira
@@ -27,10 +54,6 @@ class Ship():
         section_back = self._determine_section(back, buoys)
 
         direction = self._determine_direction(section_front, angle, buoys)
-
-        if center.x == 10820.65:
-            print(front_pb.x)
-            print(front_pb.y)
 
         if direction == -1: # virado a bombordo
             sh_pb = front_pb
@@ -80,10 +103,12 @@ class Ship():
 
 
 def main():
-    dt_path = "C:/Users/AlphaCrucis_Control1/Dropbox/Suape_2017/RT/Caso26/"
+    dt_path = "../Input/"
     dt_filename = "smh_v00036.txt"
+    vel_label = [-4, -3, -2, -1, 0, 1, 2, 3, 4] # 0 parado, 1 muito devagar, 2 devagar, 3 meia forca e 4 toda forca e seus respectivos opostos na outra direcao
     param = ["time_stamp", "x", "y", "zz", "vx", "vy", "vzz", "rudder_demanded_orientation_0", "propeller_demanded_rpm_0"]
-    ship = Ship("Aframax T150", 42, 22.5, 244.745)
+
+    ship = Ship("Aframax T150", 42, 22.5, 244.745, Velocity(0, 19.2, 38.4, 57.6, 76.8))
     buoys = [
         Point(11722.4553, 5583.4462),
         Point(11771.3626, 5379.2566),
@@ -111,6 +136,13 @@ def main():
     df.drop(df[((df["x"] > x_ini) | (df["y"] > y_ini) | (df["x"] < x_end) | (df["y"] < y_end))].index, inplace=True)
 
     df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x : ship.calc_dist(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
+    df["propeller_demanded_rpm_0"] = pd.cut(df["propeller_demanded_rpm_0"], ship.discrete_velocity(), right=False, labels=vel_label)
+    df["propeller_demanded_rpm_0"] = df.apply(lambda x : int(x["propeller_demanded_rpm_0"]), axis=1)
+
+    plt.interactive(True)
+    df.plot(x='time_stamp', y='propeller_demanded_rpm_0')
+    plt.ioff()
+    plt.show()
 
     df.to_csv("../Output/filter_smh_v00036.txt", index=False, sep=' ')
 
