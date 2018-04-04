@@ -103,10 +103,49 @@ class Ship():
 
 
 def main():
-    dt_path = "../Input/"
+    dt_root = "C:/Users/AlphaCrucis_Control1/Dropbox/"
+    dt_paths = ["Suape_2017/RT/", "Suape_Aframax/RT/", "Suape_PDZ/FT/Outputs_FT/", "Suape_PDZ/RT/", "Suape_PDZ/RT2/"]
+    dt_path = "C:/Users/AlphaCrucis_Control1/Dropbox/Suape_2017/RT/Caso26/"
+    dt_cases = ["casos.xlsx", "casos.xlsx", "casos_.xlsx", "casos.xlsx", "casos.xlsx"]
+    dt_pos_path = "Caso" # Concatenar o numero do caso
+    dt_num_case = [[1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 26, 28], # Suape_2017/RT
+                   [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], # Suape_Aframax/RT
+                   [1, 2, 3, 4], # Suape_PDZ/FT/Outputs_FT
+                   [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19], # Suape_PDZ/RT
+                   [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 19, 21]] # Suape_PDZ/RT2
+    dt_file_dict = [{"Suezmax": "smh_v00004", "Conteneiro": "smh_v00077", "Aframax": "smh_v00036"}, # Caso 28 do Suape_2017 tratado com excecao smh_v00030.txt - Conteneiro
+                    {"Aframax": "smh_v00036", "Suezmax": "smh_v00037"},
+                    {}, # ***** PERGUNTAR QUAL PEGAR JA QUE TEM VARIOS *****
+                    {}, # ***** NAVIO MENOR? APENAS 1 PROPULSOR *****
+                    {}] # ***** COM PROPULSOR E SEM LEME? *****
+    dt_file_extension = ".txt"
+
+    for idx in range(0, len(dt_paths)):
+        # Leitura da planilha de casos
+        path_xlsx = dt_root + dt_paths[idx] + dt_cases[idx]
+        print(path_xlsx)
+        df_case = pd.read_excel(path_xlsx, sheet_name="Plan1")
+        if not df_case[df_case["Caso"].isnull()].empty:
+            end_idx = df_case[df_case["Caso"].isnull()].index.tolist()[0] - 1
+            df_case = df_case.loc[0:end_idx]
+        for num_case in dt_num_case[idx]:
+            ship_fullname = df_case[df_case["Caso"] == num_case]["Navio"].to_string(index=False)
+            ship_firstname = ship_fullname.split(' ', 1)[0]
+            if idx == 0 and num_case == 28:
+                file = "smh_v00030"
+            elif idx > 1: # ***** VERIFICAR COMO TRATAR OS DADOS DO PDZ *****
+                print("A implementar")
+            else:
+                file = dt_file_dict[idx].get(ship_firstname)
+            path_case = dt_root + dt_paths[idx] + "Caso" + str(num_case) + "/" + file + dt_file_extension
+            print(path_case)
+
+    num_case = 1
     dt_filename = "smh_v00036.txt"
     vel_label = [-4, -3, -2, -1, 0, 1, 2, 3, 4] # 0 parado, 1 muito devagar, 2 devagar, 3 meia forca e 4 toda forca e seus respectivos opostos na outra direcao
     param = ["time_stamp", "x", "y", "zz", "vx", "vy", "vzz", "rudder_demanded_orientation_0", "propeller_demanded_rpm_0"]
+    simul_data = ["Navio", "Cenário", "Manobra", "Corrente", "Vento", "Onda"]
+    mult_param_data = {"Corrente": 2, "Vento": 2, "Onda": 3}
 
     ship = Ship("Aframax T150", 42, 22.5, 244.745, Velocity(0, 19.2, 38.4, 57.6, 76.8))
     buoys = [
@@ -125,6 +164,11 @@ def main():
     df.rename(columns=lambda x: x.strip(), inplace=True)
     df = df[param]
 
+    df_case = pd.read_excel("C:/Users/AlphaCrucis_Control1/Dropbox/Suape_2017/RT/casos.xlsx", sheet_name="Plan1")
+    end_idx = df_case[df_case["Caso"].isnull()].index.tolist()[0] - 1
+    df_case = df_case.loc[0:end_idx]
+    #print(df_case)
+
     # Filtragem dos dados
     # Terceiro quadrante negativo para estar entrando no porto
     df.drop(df[df["zz"] > 0].index, inplace=True)
@@ -139,12 +183,27 @@ def main():
     df["propeller_demanded_rpm_0"] = pd.cut(df["propeller_demanded_rpm_0"], ship.discrete_velocity(), right=False, labels=vel_label)
     df["propeller_demanded_rpm_0"] = df.apply(lambda x : int(x["propeller_demanded_rpm_0"]), axis=1)
 
-    plt.interactive(True)
-    df.plot(x='time_stamp', y='propeller_demanded_rpm_0')
-    plt.ioff()
-    plt.show()
+    #plt.interactive(True)
+    #df.plot(x='time_stamp', y='propeller_demanded_rpm_0')
+    #plt.ioff()
+    #plt.savefig("../Output/propeller.png")
+    #plt.show()
 
-    df.to_csv("../Output/filter_smh_v00036.txt", index=False, sep=' ')
+    f = open("../Output/filter_smh_v00036.txt", "w+")
+    for p in simul_data:
+        check = mult_param_data.get(p)
+        if check is None:
+            f.write(p + ": " + df_case[df_case["Caso"] == num_case][p].to_string(index=False) + "\r\n")
+        else:
+            pos = df_case.columns.get_loc(p)
+            f.write(p + ": ")
+            for i in range(0, check):
+                f.write(df_case[df_case["Caso"] == num_case].iloc[0, pos+i] + " ")
+            f.write("\r\n")
+    f.write("\r\n")
+    f.close()
+
+    df.to_csv("../Output/filter_smh_v00036.txt", mode='a', index=False, sep=' ')#, mode='a', index=False, sep=' ')
 
 
 main()
