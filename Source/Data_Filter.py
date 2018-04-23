@@ -178,9 +178,9 @@ def main():
             # Obtem os arquivos de dados com os dados da manobra
             ship_fullname = df_case[df_case["Caso"] == num_case]["Navio"].to_string(index=False)
             ship_firstname = ship_fullname.split(' ', 1)[0]
-            if idx == 0 and num_case == 28: # Especial pois nao bate com o nome do navio
+            if dt_paths[idx] == "Suape_2017/RT/" and num_case == 28: # Especial pois nao bate com o nome do navio
                 file = "smh_v00030"
-            elif idx > 1: # Casos PDZ
+            elif dt_paths[idx] == "Suape_PDZ/FT/Outputs_FT/" or dt_paths[idx] == "Suape_PDZ/RT/" or dt_paths[idx] == "Suape_PDZ/RT2/" : # Casos PDZ
                 file = dt_file_dict[idx].get(num_case)
             else: # Casos nao PDZ
                 file = dt_file_dict[idx].get(ship_firstname)
@@ -214,7 +214,8 @@ def main():
 
             # Filtragem dos dados
             # Terceiro quadrante negativo para estar entrando no porto
-            df.drop(df[df["zz"] > 0].index, inplace=True)
+            df = df[((df["zz"] % 360 > 135) & (df["zz"] % 360 < 315))]
+            # df.drop(df[df["zz"]%360 > 0].index, inplace=True)
             # Estar no meio dos pontos extremos para estar dentro do canal
             x_ini = buoys[1].x - ship.length / 2
             y_ini = buoys[0].y
@@ -245,7 +246,7 @@ def main():
             f.close()
 
             # plt.interactive(True)
-            df.plot(x='time_stamp', y=real_param[8])
+            df.plot(x='time_stamp', y='propeller_demanded_rpm_0')
             # plt.ioff()
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/propeller.png")
             # plt.show()
@@ -255,6 +256,8 @@ def main():
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_star.png")
             df.plot(x='time_stamp', y='distance_target')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_target.png")
+            df.plot(x='time_stamp', y='rudder_demanded_orientation_0')
+            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/rudder.png")
             plt.close("all")
 
             df.to_csv(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, mode='a', index=False, sep=' ')  # , mode='a', index=False, sep=' ')
