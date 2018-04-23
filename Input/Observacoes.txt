@@ -1,3 +1,4 @@
+﻿- Perguntar como abrir o sceneConfig para pegar o target e a boia das simulações das pastas que não são suape_2017
 - Perguntar sobre dt_file_dict
 	- Suape_PDZ/FT/Outputs_FT: vários arquivos, escolhi o mais recente
 	- Suape_PDZ/RT: o navio possui apenas 1 propulsor mesmo?

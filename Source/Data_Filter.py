@@ -33,7 +33,9 @@ class Velocity:
         self.full = full
 
     def discrete_range(self):
-        v0 = -self.full * 1.5
+        # *************** Para fazer o teste, os limites estao grandes, mas e melhor usar fator 1.5 ***********************
+        factor = 100
+        v0 = -self.full * factor
         v1 = -(self.half + self.full) / 2
         v2 = -(self.slow + self.half) / 2
         v3 = -(self.dead_slow + self.slow) / 2
@@ -42,7 +44,7 @@ class Velocity:
         v6 = (self.dead_slow + self.slow) / 2
         v7 = (self.slow + self.half) / 2
         v8 = (self.half + self.full) / 2
-        v9 = self.full * 1.5
+        v9 = self.full * factor
         return [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9]
 
 class Ship():
@@ -80,8 +82,8 @@ class Ship():
             sh_sb = front_sb
             section_pb = section_back
             section_sb = section_front
-        dsb = self._dist_line_point(buoys[section_sb], buoys[section_sb+2], sh_sb) # distancia estibordo
-        dpb = self._dist_line_point(buoys[section_pb+1], buoys[section_pb+3], sh_pb) # distancia bombordo
+        dsb = self._dist_line_point(buoys[section_sb], buoys[section_sb+2], sh_sb, -1) # distancia estibordo
+        dpb = self._dist_line_point(buoys[section_pb+1], buoys[section_pb+3], sh_pb, 1) # distancia bombordo
         dtg = self._dist_point_point(center, target) # distancia target
 
         return pd.Series([dpb, dsb, dtg])
@@ -100,6 +102,7 @@ class Ship():
         ini = Point((buoys[section_front].x + buoys[section_front + 1].x)/2, (buoys[section_front].y + buoys[section_front + 1].y)/2)
         end = Point((buoys[section_front + 2].x + buoys[section_front + 3].x)/2, (buoys[section_front+2].y + buoys[section_front + 3].y)/2)
         line_angle = m.degrees(m.atan((end.y - ini.y)/(end.x - ini.x))) - 180
+
         if line_angle - angle > 0:
             return 1
         elif line_angle - angle == 0:
@@ -108,10 +111,17 @@ class Ship():
             return -1
 
 
-    def _dist_line_point(self, line_p_1, line_p_2, point):
+    def _dist_line_point(self, line_p_1, line_p_2, point, type):
+        # type 1 bombordo e -1 estibordo
         y_diff = line_p_2.y - line_p_1.y
         x_diff = line_p_2.x - line_p_1.x
-        return abs(y_diff * point.x - x_diff * point.y + line_p_2.x * line_p_1.y - line_p_2.y * line_p_1.x) / m.sqrt(y_diff ** 2 + x_diff ** 2)
+
+        factor = 1
+        y_line = y_diff/x_diff * (point.x - line_p_1.x) + line_p_1.y
+        if (y_line > point.y and type == 1) or (y_line < point.y and type == -1):
+            factor = -1
+
+        return factor * abs(y_diff * point.x - x_diff * point.y + line_p_2.x * line_p_1.y - line_p_2.y * line_p_1.x) / m.sqrt(y_diff ** 2 + x_diff ** 2)
 
     def _dist_point_point(self, p1, p2):
         return m.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
@@ -150,17 +160,10 @@ def main():
                      "Conteneiro L366B51": Velocity(0, 20.4, 40.8, 61.2, 81.6),
                      "Capesize": Velocity(0, 27.18, 45.3, 63.42, 81.54)}
 
-    buoys = [
-        Point(11722.4553, 5583.4462),
-        Point(11771.3626, 5379.2566),
-        Point(9189.9177, 4969.4907),
-        Point(9237.9939, 4765.5281),
-        Point(6895.1451, 4417.3749),
-        Point(6954.9285, 4225.9083),
-        Point(5540.617, 4088.186),
-        Point(5809.4056, 3767.7633)
-    ]
-    target = Point(5790.0505, 3944.9947)
+    list_buoys = [[Point(11722.4553, 5583.4462), Point(11771.3626, 5379.2566), Point(9189.9177, 4969.4907), Point(9237.9939, 4765.5281),
+                   Point(6895.1451, 4417.3749), Point(6954.9285, 4225.9083), Point(5540.617, 4088.186), Point(5809.4056, 3767.7633)]
+                 ]
+    list_target = [Point(5790.0505, 3944.9947)]
 
     for idx in range(0, len(dt_paths)):
         # Leitura da planilha de casos
@@ -196,8 +199,14 @@ def main():
             df = df[real_param]
 
             # ***** Implementar selecao de boias e target *****
-            buoys = buoys
-            target = target
+            if len(list_buoys)-1 < idx:
+                buoys = list_buoys[len(list_buoys) - 1] # ********* Apagar isso quando consertar ***************
+            else:
+                buoys = list_buoys[idx]
+            if len(list_target)-1 < idx:
+                target = list_target[len(list_buoys) - 1] # ********* Apagar isso quando consertar ***************
+            else:
+                target = list_target[idx]
 
             # Procura as dimensoes do navio no p3d
             list_paths = []
@@ -227,6 +236,7 @@ def main():
             df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x: ship.calc_dist(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
             df[real_param[8]] = pd.cut(df[real_param[8]], ship.discrete_velocity(), right=False, labels=vel_label)
             df[real_param[8]] = df.apply(lambda x: int(x[real_param[8]]), axis=1)
+            df = df.round({"distance_port": 3, "distance_starboard": 3, "distance_target": 3})
 
             # Gera a saida
             if not os.path.exists(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case)):
@@ -246,7 +256,7 @@ def main():
             f.close()
 
             # plt.interactive(True)
-            df.plot(x='time_stamp', y='propeller_demanded_rpm_0')
+            df.plot(x='time_stamp', y=real_param[8])
             # plt.ioff()
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/propeller.png")
             # plt.show()
