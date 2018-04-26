@@ -4,18 +4,25 @@ import matplotlib.pyplot as plt
 import re
 import os
 
+err_control = None
+
 class P3D_file:
     def __init__(self, path):
         self.path = path
 
     def find_dimensions(self):
+        global err_control
         regex = re.compile("VESSEL[\s\S\n]*?(?<=BEAM = )(\d+.\d+)[\s\S\n]*?(?<=HEIGHT = )(\d+.\d+)[\s\S\n]*?(?<=LENGTH = )(\d+.\d+)")
         p3d_file = open(self.path)
         dim = regex.findall(p3d_file.read())
-        beam = float(dim[0][0])
-        height = float(dim[0][1])
-        length = float(dim[0][2])
-        return beam, height, length
+        if len(dim[0]) != 3:
+            err_control.eprint("Dimensoes da embarcacao nao encontradas")
+            return [-1, -1, -1]
+        else:
+            beam = float(dim[0][0])
+            height = float(dim[0][1])
+            length = float(dim[0][2])
+            return beam, height, length
 
 
 class Point:
@@ -34,7 +41,7 @@ class Velocity:
 
     def discrete_range(self):
         # *************** Para fazer o teste, os limites estao grandes, mas e melhor usar fator 1.5 ***********************
-        factor = 100
+        factor = 150
         v0 = -self.full * factor
         v1 = -(self.half + self.full) / 2
         v2 = -(self.slow + self.half) / 2
@@ -47,6 +54,22 @@ class Velocity:
         v9 = self.full * factor
         return [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9]
 
+    def discrete_value(self, idx):
+        if abs(idx) == 0:
+            val = self.stop
+        elif abs(idx) == 1:
+            val = self.dead_slow
+        elif abs(idx) == 2:
+            val = self.slow
+        elif abs(idx) == 3:
+            val = self.half
+        else:
+            val = self.full
+
+        if idx < 0:
+            val = -val
+        return val
+
 class Ship():
     def __init__(self, name, dim, velocity):
         self.name = name
@@ -57,6 +80,9 @@ class Ship():
 
     def discrete_velocity(self):
         return self.velocity.discrete_range()
+
+    def corresp_vel(self, idx):
+        return self.velocity.discrete_value(idx)
 
     def calc_dist(self, center, angle, buoys, target):
         # Coordenadas medias frontal e traseira
@@ -72,36 +98,36 @@ class Ship():
 
         direction = self._determine_direction(section_front, angle, buoys)
 
-        if direction == -1: # virado a bombordo
+        if direction == -1:  # virado a bombordo
             sh_pb = front_pb
             sh_sb = back_sb
             section_pb = section_front
             section_sb = section_back
-        else: # na direcao ou virado a estibordo
+        else:  # na direcao ou virado a estibordo
             sh_pb = back_pb
             sh_sb = front_sb
             section_pb = section_back
             section_sb = section_front
-        dsb = self._dist_line_point(buoys[section_sb], buoys[section_sb+2], sh_sb, -1) # distancia estibordo
-        dpb = self._dist_line_point(buoys[section_pb+1], buoys[section_pb+3], sh_pb, 1) # distancia bombordo
-        dtg = self._dist_point_point(center, target) # distancia target
+        dsb = self._dist_line_point(buoys[section_sb], buoys[section_sb + 2], sh_sb, -1)  # distancia estibordo
+        dpb = self._dist_line_point(buoys[section_pb + 1], buoys[section_pb + 3], sh_pb, 1)  # distancia bombordo
+        dtg = self._dist_point_point(center, target)  # distancia target
 
         return pd.Series([dpb, dsb, dtg])
 
     def _determine_section(self, point, buoys):
         for i in range(0, len(buoys), 2):
-            if point.x < (buoys[len(buoys)-i-1].x + buoys[len(buoys)-i-2].x)/2:
-                if len(buoys)-i-2 == len(buoys)-2:
-                    return len(buoys) - i - 4 # Desconsidera se passa do target
+            if point.x < (buoys[len(buoys) - i - 1].x + buoys[len(buoys) - i - 2].x) / 2:
+                if len(buoys) - i - 2 == len(buoys) - 2:
+                    return len(buoys) - i - 4  # Desconsidera se passa do target
                 else:
                     return len(buoys) - i - 2
         return len(buoys) - i - 2
 
     def _determine_direction(self, section_front, angle, buoys):
         # -1 para bombordo, 0 na mesma direcao e 1 para estibordo
-        ini = Point((buoys[section_front].x + buoys[section_front + 1].x)/2, (buoys[section_front].y + buoys[section_front + 1].y)/2)
-        end = Point((buoys[section_front + 2].x + buoys[section_front + 3].x)/2, (buoys[section_front+2].y + buoys[section_front + 3].y)/2)
-        line_angle = m.degrees(m.atan((end.y - ini.y)/(end.x - ini.x))) - 180
+        ini = Point((buoys[section_front].x + buoys[section_front + 1].x) / 2, (buoys[section_front].y + buoys[section_front + 1].y) / 2)
+        end = Point((buoys[section_front + 2].x + buoys[section_front + 3].x) / 2, (buoys[section_front + 2].y + buoys[section_front + 3].y) / 2)
+        line_angle = m.degrees(m.atan((end.y - ini.y) / (end.x - ini.x))) - 180
 
         if line_angle - angle > 0:
             return 1
@@ -110,14 +136,13 @@ class Ship():
         else:
             return -1
 
-
     def _dist_line_point(self, line_p_1, line_p_2, point, type):
         # type 1 bombordo e -1 estibordo
         y_diff = line_p_2.y - line_p_1.y
         x_diff = line_p_2.x - line_p_1.x
 
         factor = 1
-        y_line = y_diff/x_diff * (point.x - line_p_1.x) + line_p_1.y
+        y_line = y_diff / x_diff * (point.x - line_p_1.x) + line_p_1.y
         if (y_line > point.y and type == 1) or (y_line < point.y and type == -1):
             factor = -1
 
@@ -127,25 +152,47 @@ class Ship():
         return m.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
 
 
+class ErrorPrint:
+    def __init__(self):
+        self.count_error = 0
+        self.global_error = 0
+
+    def eprint(self, text):
+        print("\t\t*** ERRO: " + text + " ***")
+        self.count_error = self.count_error + 1
+        self.global_error = self.global_error + 1
+
+    def reset(self):
+        self.count_error = 0
+
+    def get_num_error(self):
+        return self.count_error
+
+    def get_num_global_error(self):
+        return self.global_error
+
+
 def main():
+    # Para adicionar nova pasta do dropbox: adicionar o diretorio dos casos em dt_paths, o nome do arquivo com as informacoes dos casos em dt_cases,
+    # uma lista dos casos a serem testados em dt_num_case e os arquivos de leitura de cada caso em dt_file_dict
+    # Verificar tambem se sera necessario alterar o nome das colunas em param, adicionar velocidades de embarcacoes em ship_velocity e o ponto das boias e do target em list_buoys e list_target
     dt_root = "C:/Users/AlphaCrucis_Control1/Dropbox/"
     dt_paths = ["Suape_2017/RT/", "Suape_Aframax/RT/", "Suape_PDZ/FT/Outputs_FT/", "Suape_PDZ/RT/", "Suape_PDZ/RT2/"]
     dt_cases = ["casos.xlsx", "casos.xlsx", "casos_.xlsx", "casos.xlsx", "casos.xlsx"]
-    dt_pos_path = "Caso" # Concatenar o numero do caso
-    dt_num_case = [[1, 2, 3, 4, 5, 6, 7, 9, 10, 12, 13, 14, 17, 18, 22, 23, 26, 28], # Suape_2017/RT
-                   [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], # Suape_Aframax/RT
-                   [1, 2, 3, 4], # Suape_PDZ/FT/Outputs_FT
-                   [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19], # Suape_PDZ/RT
-                   [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 19, 21]] # Suape_PDZ/RT2
+    dt_pos_path = "Caso"  # Concatenar o numero do caso
+    dt_num_case = [[1, 2, 3, 4, 5, 6, 9, 10, 12, 13, 14, 17, 18, 22, 23, 26, 28],  # Suape_2017/RT
+                   [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],  # Suape_Aframax/RT
+                   [1, 2, 3, 4],  # Suape_PDZ/FT/Outputs_FT
+                   [1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 17],  # Suape_PDZ/RT
+                   [1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 19]]  # Suape_PDZ/RT2
     dt_file_dict = [{"Suezmax": "smh_v00004", "Conteneiro": "smh_v00077", "Aframax": "smh_v00036"},  # Caso 28 do Suape_2017 tratado com excecao smh_v00030.txt - Conteneiro
                     {"Aframax": "smh_v00036", "Suezmax": "smh_v00037"},
-                    {1: "smh_v00004_20170814_102039", 2: "smh_v00004_20170814_103220", 3: "smh_v00004_20170814_114251", 4: "smh_v00004_20170816_175923"}, # ***** PERGUNTAR QUAL PEGAR JA QUE TEM VARIOS *****
-                    {1: "smh_v00037_20171009_093846", 2: "smh_v00037_20171009_101104", 3: "smh_v00037_20171009_104723", 4: "smh_v00037_20171009_112202", 5: "smh_v00028_20171009_135920", 6: "smh_v00028_20171009_154051", 7: "smh_v00028_20171009_170521",
-                     8: "smh_v00028_20171009_175619", 9: "smh_v00053_20171010_081234", 11: "smh_v00053_20171010_095209", 12: "smh_v00030_20171010_110500", 13: "smh_v00030_20171010_134312", 14: "smh_v00072_20171010_150159",
-                     15: "smh_v00072_20171010_154827", 16: "smh_v00025_20171010_165913", 17: "smh_v00025_20171010_181407", 18: "smh_v00093_20171011_090117", 19: "smh_v00093_20171011_094055"}, # ***** NAVIO MENOR? APENAS 1 PROPULSOR EM ALGUNS CASOS *****
-                    {1: "smh_v00037_20171218_093301", 2: "smh_v00037_20171218_104020", 3: "smh_v00028_20171218_115245", 4: "smh_v00028_20171218_135301", 5: "smh_v00028_20171218_144630", 6: "smh_v00053_20171218_155203", 8: "smh_v00053_20171219_091526",
-                     9: "smh_v00030_20171219_100258", 10: "smh_v00053_20171219_102324", 11: "smh_v00030_20171219_111047", 12: "smh_v00030_20171219_132445", 13: "smh_v00072_20171219_142144", 14: "smh_v00072_20171219_151435",
-                     15: "smh_v00072_20171219_160645", 19: "smh_v00030_20171220_105159", 21: "smh_v00025_20171220_145500"}] # ***** COM PROPULSOR E SEM LEME? *****
+                    {1: "smh_v00004_20170814_102039", 2: "smh_v00004_20170814_103220", 3: "smh_v00004_20170814_114251", 4: "smh_v00004_20170816_175923"},
+                    {1: "smh_v00037_20171009_093846", 2: "smh_v00037_20171009_101104", 3: "smh_v00037_20171009_104723", 4: "smh_v00037_20171009_112202", 5: "smh_v00028_20171009_135920", 6: "smh_v00028_20171009_154051",
+                     7: "smh_v00028_20171009_170521", 8: "smh_v00028_20171009_175619", 9: "smh_v00053_20171010_081234", 12: "smh_v00030_20171010_110500", 13: "smh_v00030_20171010_134312",
+                     14: "smh_v00072_20171010_150159", 15: "smh_v00072_20171010_154827", 16: "smh_v00025_20171010_165913", 17: "smh_v00025_20171010_181407"},
+                    {1: "smh_v00037_20171218_093301", 2: "smh_v00037_20171218_104020", 3: "smh_v00028_20171218_115245", 4: "smh_v00028_20171218_135301", 5: "smh_v00028_20171218_144630", 6: "smh_v00053_20171218_155203",
+                     8: "smh_v00053_20171219_091526", 9: "smh_v00030_20171219_100258", 11: "smh_v00030_20171219_111047", 12: "smh_v00030_20171219_132445", 19: "smh_v00030_20171220_105159"}]
     dt_file_extension = ".txt"
     dt_out_path = "../Output/"
 
@@ -158,18 +205,38 @@ def main():
                      "Suezmax": Velocity(0, 28.77, 32.88, 57.54, 65.76),
                      "Conteneiro 336B48": Velocity(0, 31.92, 39.9, 55.86, 63.84),
                      "Conteneiro L366B51": Velocity(0, 20.4, 40.8, 61.2, 81.6),
-                     "Capesize": Velocity(0, 27.18, 45.3, 63.42, 81.54)}
+                     "Capesize": Velocity(0, 27.18, 45.3, 63.42, 81.54),
+                     "Capsan L333B48T14.3": Velocity(0, 31.92, 39.9, 55.86, 63.84),  # Novo - igual Conteneiro 336B48
+                     "NewPanamax L366B49T15.2": Velocity(0, 20.4, 40.8, 61.2, 81.6),  # Novo - igual Conteneiro L366B51
+                     }
 
     list_buoys = [[Point(11722.4553, 5583.4462), Point(11771.3626, 5379.2566), Point(9189.9177, 4969.4907), Point(9237.9939, 4765.5281),
-                   Point(6895.1451, 4417.3749), Point(6954.9285, 4225.9083), Point(5540.617, 4088.186), Point(5809.4056, 3767.7633)]
-                 ]
-    list_target = [Point(5790.0505, 3944.9947)]
+                   Point(6895.1451, 4417.3749), Point(6954.9285, 4225.9083), Point(5540.617, 4088.186), Point(5809.4056, 3767.7633)],
+                  [Point(11722.4553, 5583.4462), Point(11771.3626, 5379.2566), Point(9189.9177, 4969.4907), Point(9237.9939, 4765.5281),
+                   Point(6895.1451, 4417.3749), Point(6954.9285, 4225.9083), Point(5540.617, 4088.186), Point(5809.4056, 3767.7633)],
+                  [Point(11694.9971, 5591.3703), Point(11761.3162, 5347.1197), Point(9127.6203, 4943.6262), Point(9189.0030, 4698.5468),
+                   Point(7175.8933, 4447.2715), Point(7220.9278, 4202.2184)],
+                  [Point(11694.9971, 5591.3703), Point(11761.3162, 5347.1197), Point(9127.6203, 4943.6262), Point(9189.0030, 4698.5468),
+                   Point(7175.8933, 4447.2715), Point(7220.9278, 4202.2184)],
+                  [Point(11709.5909, 5544.3389), Point(11753.9045, 5340.5588), Point(9678.4495, 5060.9246), Point(9726.6952, 4851.4281),
+                   Point(8044.8985, 4665.5996), Point(8085.7122, 4459.2627), Point(6897.7785, 4433.6627), Point(6959.7351, 4185.0147)]
+                  ]
+    list_target = [Point(5790.0505, 3944.9947),
+                   Point(5790.0505, 3944.9947),
+                   Point(7200.3366, 4321.1497),
+                   Point(7200.3366, 4321.1497),
+                   Point(6926.6320, 4306.2469)]
+    global err_control
+    err_control = ErrorPrint()
 
     for idx in range(0, len(dt_paths)):
         # Leitura da planilha de casos
         path_xlsx = dt_root + dt_paths[idx] + dt_cases[idx]
-        print(path_xlsx)
-        df_case = pd.read_excel(path_xlsx, sheet_name="Plan1")
+        print("Executando na pasta " + dt_paths[idx] + ":")
+        try:
+            df_case = pd.read_excel(path_xlsx, sheet_name="Plan1")
+        except:
+            err_control.eprint("Planilha de casos nao encontrada")
 
         # Limpeza dos dados para obter apenas casos existentes
         if not df_case[df_case["Caso"].isnull()].empty:
@@ -178,33 +245,35 @@ def main():
 
         # Itera pelos casos selecionados em cada pasta
         for num_case in dt_num_case[idx]:
+            err_control.reset()
+            print("\tGerando caso " + str(num_case) + "...")
+
             # Obtem os arquivos de dados com os dados da manobra
             ship_fullname = df_case[df_case["Caso"] == num_case]["Navio"].to_string(index=False)
             ship_firstname = ship_fullname.split(' ', 1)[0]
-            if dt_paths[idx] == "Suape_2017/RT/" and num_case == 28: # Especial pois nao bate com o nome do navio
+            if dt_paths[idx] == "Suape_2017/RT/" and num_case == 28:  # Especial pois nao bate com o nome do navio
                 file = "smh_v00030"
-            elif dt_paths[idx] == "Suape_PDZ/FT/Outputs_FT/" or dt_paths[idx] == "Suape_PDZ/RT/" or dt_paths[idx] == "Suape_PDZ/RT2/" : # Casos PDZ
+            elif dt_paths[idx] == "Suape_PDZ/FT/Outputs_FT/" or dt_paths[idx] == "Suape_PDZ/RT/" or dt_paths[idx] == "Suape_PDZ/RT2/":  # Casos PDZ
                 file = dt_file_dict[idx].get(num_case)
-            else: # Casos nao PDZ
+            else:  # Casos nao PDZ
                 file = dt_file_dict[idx].get(ship_firstname)
             path_case = dt_root + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension
-            print(path_case)
             df = pd.read_csv(path_case, escapechar="%", skiprows=2, delim_whitespace=True)
             df.rename(columns=lambda x: x.strip(), inplace=True)
 
-            if idx == 0:
-                real_param = param[0]
-            else:
+            if idx == 1:
                 real_param = param[1]
+            else:
+                real_param = param[0]
             df = df[real_param]
 
             # ***** Implementar selecao de boias e target *****
-            if len(list_buoys)-1 < idx:
-                buoys = list_buoys[len(list_buoys) - 1] # ********* Apagar isso quando consertar ***************
+            if len(list_buoys) - 1 < idx:
+                err_control.eprint("Posicao das boias inexistente")
             else:
                 buoys = list_buoys[idx]
-            if len(list_target)-1 < idx:
-                target = list_target[len(list_buoys) - 1] # ********* Apagar isso quando consertar ***************
+            if len(list_target) - 1 < idx:
+                err_control.eprint("Posicao do target inexistente")
             else:
                 target = list_target[idx]
 
@@ -213,18 +282,22 @@ def main():
             for filep3d in os.listdir(dt_root + dt_paths[idx] + dt_pos_path + str(num_case)):
                 if filep3d.endswith(".p3d"):
                     list_paths.append(os.path.join(dt_root + dt_paths[idx] + dt_pos_path + str(num_case), filep3d))
-            ship_dim = P3D_file(list_paths[0]).find_dimensions() # ***** Por enquanto esta usando o primeiro p3d que encontra, mas precisa verificar o que fazer *****
+            if len(list_paths) > 1:
+                err_control.eprint("Multiplicidade de P3D")
+            ship_dim = P3D_file(list_paths[len(list_paths)-1]).find_dimensions()  # Usa o ultimo P3D caso tenha multiplicidade
 
             # Cria o navio do teste
             vel = ship_velocity.get(ship_firstname)
             if vel is None:
-                vel = ship_velocity.get("Aframax") # ************* REMOVER ISSO DEPOIS ****************
-            ship = Ship(ship_fullname, ship_dim, vel) # ***** Talvez seja melhor mudar para fullname dependendo se o nome precisa bater inteiro ou nao *****
+                vel = ship_velocity.get(ship_fullname)
+                if vel is None:
+                    err_control.eprint("Navio nao possui velocidade registrada - " + ship_fullname)
+                    vel = ship_velocity.get("Aframax")  # ************* REMOVER ISSO DEPOIS ****************
+            ship = Ship(ship_fullname, ship_dim, vel)  # ***** Talvez seja melhor mudar para fullname dependendo se o nome precisa bater inteiro ou nao *****
 
             # Filtragem dos dados
             # Terceiro quadrante negativo para estar entrando no porto
             df = df[((df["zz"] % 360 > 135) & (df["zz"] % 360 < 315))]
-            # df.drop(df[df["zz"]%360 > 0].index, inplace=True)
             # Estar no meio dos pontos extremos para estar dentro do canal
             x_ini = buoys[1].x - ship.length / 2
             y_ini = buoys[0].y
@@ -234,8 +307,10 @@ def main():
 
             # Calcula as distancias e discretiza a velocidade
             df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x: ship.calc_dist(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
+            df["original_propeller"] = df[real_param[8]]
             df[real_param[8]] = pd.cut(df[real_param[8]], ship.discrete_velocity(), right=False, labels=vel_label)
             df[real_param[8]] = df.apply(lambda x: int(x[real_param[8]]), axis=1)
+            df["discrete_propeller"] = df.apply(lambda x: ship.corresp_vel(x[real_param[8]]), axis=1)
             df = df.round({"distance_port": 3, "distance_starboard": 3, "distance_target": 3})
 
             # Gera a saida
@@ -268,69 +343,24 @@ def main():
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_target.png")
             df.plot(x='time_stamp', y='rudder_demanded_orientation_0')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/rudder.png")
+            ax = df.plot(x='time_stamp', y='original_propeller')
+            df.plot(x='time_stamp', y='discrete_propeller', ax=ax)
+            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/original_discrete_propeller.png")
             plt.close("all")
 
             df.to_csv(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, mode='a', index=False, sep=' ')  # , mode='a', index=False, sep=' ')
 
+            if err_control.get_num_error() == 0:
+                print("\t\tOK: Sem erro de execucao")
+            else:
+                print("\t\tDiretorio do teste: " + dt_root + dt_paths[idx] + dt_pos_path + str(num_case))
 
+    print("\n*** Processamento concluido! ***")
+    print("Quantidade total de erros encontrados: " + str(err_control.get_num_global_error()))
 
-
-    # num_case = 1
-    # dt_filename = "smh_v00036.txt"
-    # dt_path = "C:/Users/AlphaCrucis_Control1/Dropbox/Suape_2017/RT/Caso26/"
-    #
-    #
-    # ship = Ship("Aframax T150", [42, 22.5, 244.745], Velocity(0, 19.2, 38.4, 57.6, 76.8))
-    #
-    #
-    # df = pd.read_csv(dt_path + dt_filename, escapechar="%", skiprows=2, delim_whitespace=True)
-    # df.rename(columns=lambda x: x.strip(), inplace=True)
-    # df = df[param[0]]
-    #
-    # df_case = pd.read_excel("C:/Users/AlphaCrucis_Control1/Dropbox/Suape_2017/RT/casos.xlsx", sheet_name="Plan1")
-    # end_idx = df_case[df_case["Caso"].isnull()].index.tolist()[0] - 1
-    # df_case = df_case.loc[0:end_idx]
-    # #print(df_case)
-    #
-    # # Filtragem dos dados
-    # # Terceiro quadrante negativo para estar entrando no porto
-    # df.drop(df[df["zz"] > 0].index, inplace=True)
-    # # Estar no meio dos pontos extremos para estar dentro do canal
-    # x_ini = buoys[1].x
-    # y_ini = buoys[0].y
-    # x_end = target.x
-    # y_end = buoys[len(buoys)-1].y
-    # df.drop(df[((df["x"] > x_ini) | (df["y"] > y_ini) | (df["x"] < x_end) | (df["y"] < y_end))].index, inplace=True)
-    #
-    # df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x : ship.calc_dist(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
-    # df["propeller_demanded_rpm_0"] = pd.cut(df["propeller_demanded_rpm_0"], ship.discrete_velocity(), right=False, labels=vel_label)
-    # df["propeller_demanded_rpm_0"] = df.apply(lambda x : int(x["propeller_demanded_rpm_0"]), axis=1)
-    #
-    # #plt.interactive(True)
-    # #df.plot(x='time_stamp', y='propeller_demanded_rpm_0')
-    # #plt.ioff()
-    # #plt.savefig("../Output/propeller.png")
-    # #plt.show()
-    #
-    # f = open("../Output/filter_smh_v00036.txt", "w+")
-    # for p in simul_data:
-    #     check = mult_param_data.get(p)
-    #     if check is None:
-    #         f.write(p + ": " + df_case[df_case["Caso"] == num_case][p].to_string(index=False) + "\r\n")
-    #     else:
-    #         pos = df_case.columns.get_loc(p)
-    #         f.write(p + ": ")
-    #         for i in range(0, check):
-    #             f.write(df_case[df_case["Caso"] == num_case].iloc[0, pos+i] + " ")
-    #         f.write("\r\n")
-    # f.write("\r\n")
-    # f.close()
-    #
-    # df.to_csv("../Output/filter_smh_v00036.txt", mode='a', index=False, sep=' ')#, mode='a', index=False, sep=' ')
 
 
 main()
-
 
 #################################################################
 # Codigo auxiliar no matlab para comparar a posicao das boias
