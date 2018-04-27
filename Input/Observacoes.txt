@@ -4,5 +4,5 @@
 	C:/Users/AlphaCrucis_Control1/Dropbox/Suape_PDZ/RT2/Caso6
 - Perguntar se é muito curto: C:/Users/AlphaCrucis_Control1/Dropbox/Suape_PDZ/RT/Caso12 C:\Users\AlphaCrucis_Control1\Dropbox\Suape_PDZ\RT2\Caso8
 - Perguntar sobre ship_velocity
-	- Conteneiro L400B59T14.5  C:\Users\AlphaCrucis_Control1\Dropbox\Suape_PDZ\RT\Caso15
+	- Conteneiro L400B59T14.5
 	- SmallCape L270B45T14.5

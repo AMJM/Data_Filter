@@ -55,6 +55,7 @@ class Velocity:
         return [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9]
 
     def discrete_value(self, idx):
+        global err_control
         if abs(idx) == 0:
             val = self.stop
         elif abs(idx) == 1:
@@ -63,12 +64,15 @@ class Velocity:
             val = self.slow
         elif abs(idx) == 3:
             val = self.half
-        else:
+        elif abs(idx) == 4:
             val = self.full
+        else:
+            err_control.eprint("Velocidade discretizada incoerente")
 
         if idx < 0:
             val = -val
         return val
+
 
 class Ship():
     def __init__(self, name, dim, velocity):
@@ -85,6 +89,7 @@ class Ship():
         return self.velocity.discrete_value(idx)
 
     def calc_dist(self, center, angle, buoys, target):
+        global err_control
         # Coordenadas medias frontal e traseira
         front = Point(center.x + self.length / 2 * m.cos(m.radians(angle)), center.y + self.beam / 2 * m.sin(m.radians(angle)))
         back = Point(center.x - self.length / 2 * m.cos(m.radians(angle)), center.y - self.beam / 2 * m.sin(m.radians(angle)))
@@ -111,6 +116,9 @@ class Ship():
         dsb = self._dist_line_point(buoys[section_sb], buoys[section_sb + 2], sh_sb, -1)  # distancia estibordo
         dpb = self._dist_line_point(buoys[section_pb + 1], buoys[section_pb + 3], sh_pb, 1)  # distancia bombordo
         dtg = self._dist_point_point(center, target)  # distancia target
+
+        if ~((angle % 360 > 135) and (angle % 360 < 315)):
+            err_control.eprint("Direcao da embarcacao em saida")
 
         return pd.Series([dpb, dsb, dtg])
 
