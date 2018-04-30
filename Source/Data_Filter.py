@@ -32,21 +32,25 @@ class Point:
 
 
 class Velocity:
-    def __init__(self, stop, dead_slow, slow, half, full):
+    def __init__(self, stop, dead_slow, slow, half, full, rdead_slow = 0, rslow = 0, rhalf = 0, rfull = 0):
         self.stop = stop
         self.dead_slow = dead_slow
         self.slow = slow
         self.half = half
         self.full = full
+        self.rdead_slow = rdead_slow if rdead_slow < dead_slow else -dead_slow
+        self.rslow = rslow if rslow < slow else -slow
+        self.rhalf = rhalf if rhalf < half else -half
+        self.rfull = rfull if rfull < full else -full
 
     def discrete_range(self):
         # *************** Para fazer o teste, os limites estao grandes, mas e melhor usar fator 1.5 ***********************
         factor = 150
-        v0 = -self.full * factor
-        v1 = -(self.half + self.full) / 2
-        v2 = -(self.slow + self.half) / 2
-        v3 = -(self.dead_slow + self.slow) / 2
-        v4 = -(self.stop + self.dead_slow) / 2
+        v0 = self.rfull * factor
+        v1 = (self.rhalf + self.rfull) / 2
+        v2 = (self.rslow + self.rhalf) / 2
+        v3 = (self.rdead_slow + self.rslow) / 2
+        v4 = (self.stop + self.rdead_slow) / 2
         v5 = (self.stop + self.dead_slow) / 2
         v6 = (self.dead_slow + self.slow) / 2
         v7 = (self.slow + self.half) / 2
@@ -209,14 +213,15 @@ def main():
              ["time_stamp", "x", "y", "zz", "vx", "vy", "vzz", "rudder_demanded_orientation_0", "propeller_demanded_0"]]
     simul_data = ["Navio", "Cenário", "Manobra", "Corrente", "Vento", "Onda"]
     mult_param_data = {"Corrente": 2, "Vento": 2, "Onda": 3}
-    ship_velocity = {"Aframax": Velocity(0, 19.2, 38.4, 57.6, 76.8),
-                     "Suezmax": Velocity(0, 28.77, 32.88, 57.54, 65.76),
-                     "Conteneiro 336B48": Velocity(0, 31.92, 39.9, 55.86, 63.84),
-                     "Conteneiro L366B51": Velocity(0, 20.4, 40.8, 61.2, 81.6),
-                     "Capesize": Velocity(0, 27.18, 45.3, 63.42, 81.54),
-                     "Capsan L333B48T14.3": Velocity(0, 31.92, 39.9, 55.86, 63.84),  # Novo - igual Conteneiro 336B48
-                     "NewPanamax L366B49T15.2": Velocity(0, 20.4, 40.8, 61.2, 81.6),  # Novo - igual Conteneiro L366B51
-                     }
+    ship_velocity_rpm = {"Aframax": Velocity(0, 19.2, 38.4, 57.6, 76.8),
+                         "Suezmax": Velocity(0, 28.77, 32.88, 57.54, 65.76),
+                         "Conteneiro 336B48": Velocity(0, 31.92, 39.9, 55.86, 63.84),
+                         "Conteneiro L366B51": Velocity(0, 20.4, 40.8, 61.2, 81.6),
+                         "Capesize": Velocity(0, 27.18, 45.3, 63.42, 81.54),
+                         "Capsan L333B48T14.3": Velocity(0, 31.92, 39.9, 55.86, 63.84),  # Novo - igual Conteneiro 336B48
+                         "NewPanamax L366B49T15.2": Velocity(0, 20.4, 40.8, 61.2, 81.6),  # Novo - igual Conteneiro L366B51
+                         }
+    ship_velocity_kn = {"Aframax": Velocity(0, 203.09, 564.14, 1105.71, 1827.8, -121.85, -338.48, -663.42, -1096.68)}
 
     list_buoys = [[Point(11722.4553, 5583.4462), Point(11771.3626, 5379.2566), Point(9189.9177, 4969.4907), Point(9237.9939, 4765.5281),
                    Point(6895.1451, 4417.3749), Point(6954.9285, 4225.9083), Point(5540.617, 4088.186), Point(5809.4056, 3767.7633)],
@@ -269,7 +274,7 @@ def main():
             df = pd.read_csv(path_case, escapechar="%", skiprows=2, delim_whitespace=True)
             df.rename(columns=lambda x: x.strip(), inplace=True)
 
-            if idx == 1:
+            if dt_paths[idx] == "Suape_Aframax/RT/":
                 real_param = param[1]
             else:
                 real_param = param[0]
@@ -295,6 +300,12 @@ def main():
             ship_dim = P3D_file(list_paths[len(list_paths)-1]).find_dimensions()  # Usa o ultimo P3D caso tenha multiplicidade
 
             # Cria o navio do teste
+            if real_param[8] == "propeller_demanded_rpm_0":
+                ship_velocity = ship_velocity_rpm
+            elif real_param[8] == "propeller_demanded_0":
+                ship_velocity = ship_velocity_kn
+            else:
+                err_control("Parametro de velocidade nao definido")
             vel = ship_velocity.get(ship_firstname)
             if vel is None:
                 vel = ship_velocity.get(ship_fullname)
