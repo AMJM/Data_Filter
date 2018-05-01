@@ -38,14 +38,14 @@ class Velocity:
         self.slow = slow
         self.half = half
         self.full = full
-        self.rdead_slow = rdead_slow if rdead_slow < dead_slow else -dead_slow
-        self.rslow = rslow if rslow < slow else -slow
-        self.rhalf = rhalf if rhalf < half else -half
-        self.rfull = rfull if rfull < full else -full
+        self.rdead_slow = rdead_slow if rdead_slow != 0 else -dead_slow
+        self.rslow = rslow if rslow != 0 else -slow
+        self.rhalf = rhalf if rhalf != 0 else -half
+        self.rfull = rfull if rfull != 0 else -full
 
     def discrete_range(self):
         # *************** Para fazer o teste, os limites estao grandes, mas e melhor usar fator 1.5 ***********************
-        factor = 150
+        factor = 1.5
         v0 = self.rfull * factor
         v1 = (self.rhalf + self.rfull) / 2
         v2 = (self.rslow + self.rhalf) / 2
@@ -60,21 +60,27 @@ class Velocity:
 
     def discrete_value(self, idx):
         global err_control
-        if abs(idx) == 0:
+        if idx == -4:
+            val = self.rfull
+        elif idx == -3:
+            val = self.rhalf
+        elif idx == -2:
+            val = self.rslow
+        elif idx == -1:
+            val = self.rdead_slow
+        elif idx == 0:
             val = self.stop
-        elif abs(idx) == 1:
+        elif idx == 1:
             val = self.dead_slow
-        elif abs(idx) == 2:
+        elif idx == 2:
             val = self.slow
-        elif abs(idx) == 3:
+        elif idx == 3:
             val = self.half
-        elif abs(idx) == 4:
+        elif idx == 4:
             val = self.full
         else:
             err_control.eprint("Velocidade discretizada incoerente")
 
-        if idx < 0:
-            val = -val
         return val
 
 
@@ -221,8 +227,10 @@ def main():
                          "Capsan L333B48T14.3": Velocity(0, 31.92, 39.9, 55.86, 63.84),  # Novo - igual Conteneiro 336B48
                          "NewPanamax L366B49T15.2": Velocity(0, 20.4, 40.8, 61.2, 81.6),  # Novo - igual Conteneiro L366B51
                          }
-    ship_velocity_kn = {"Aframax": Velocity(0, 203.09, 564.14, 1105.71, 1827.8, -121.85, -338.48, -663.42, -1096.68)}
-
+    ship_velocity_kn = {"Aframax": Velocity(0, 203.09, 564.14, 1105.71, 1827.8, -121.85, -338.48, -663.42, -1096.68),
+                        "Aframax_Osc": Velocity(0, 95, 200, 400, 800),
+                        "Suezmax": Velocity(0, 730.1, 1051.54, 1431.78, 2366.7, -438.06, -631.12, -858.48, -1420.02)}
+    list_cases_vel_osc = [1, 3, 4, 5]  # Velocidades com comportamento estranho
     list_buoys = [[Point(11722.4553, 5583.4462), Point(11771.3626, 5379.2566), Point(9189.9177, 4969.4907), Point(9237.9939, 4765.5281),
                    Point(6895.1451, 4417.3749), Point(6954.9285, 4225.9083), Point(5540.617, 4088.186), Point(5809.4056, 3767.7633)],
                   [Point(11722.4553, 5583.4462), Point(11771.3626, 5379.2566), Point(9189.9177, 4969.4907), Point(9237.9939, 4765.5281),
@@ -306,6 +314,11 @@ def main():
                 ship_velocity = ship_velocity_kn
             else:
                 err_control("Parametro de velocidade nao definido")
+
+            if dt_paths[idx] == "Suape_Aframax/RT/" and (num_case in list_cases_vel_osc):
+                # Tratamento para velocidades oscilatorias em Aframax
+                ship_firstname = "Aframax_Osc"
+
             vel = ship_velocity.get(ship_firstname)
             if vel is None:
                 vel = ship_velocity.get(ship_fullname)
