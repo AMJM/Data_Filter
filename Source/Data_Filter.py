@@ -221,6 +221,7 @@ def main():
     mult_param_data = {"Corrente": 2, "Vento": 2, "Onda": 3}
     ship_velocity_rpm = {"Aframax": Velocity(0, 19.2, 38.4, 57.6, 76.8),
                          "Suezmax": Velocity(0, 28.77, 32.88, 57.54, 65.76),
+                         "Suezmax L280B50T17": Velocity(0, 29, 41, 58, 74),
                          "Conteneiro 336B48": Velocity(0, 31.92, 39.9, 55.86, 63.84),
                          "Conteneiro L366B51": Velocity(0, 20.4, 40.8, 61.2, 81.6),
                          "Capesize": Velocity(0, 27.18, 45.3, 63.42, 81.54),
@@ -229,7 +230,8 @@ def main():
                          }
     ship_velocity_kn = {"Aframax": Velocity(0, 203.09, 564.14, 1105.71, 1827.8, -121.85, -338.48, -663.42, -1096.68),
                         "Aframax_Osc": Velocity(0, 95, 200, 400, 800),
-                        "Suezmax": Velocity(0, 730.1, 1051.54, 1431.78, 2366.7, -438.06, -631.12, -858.48, -1420.02)}
+                        "Suezmax": Velocity(0, 730.1, 1051.54, 1431.78, 2366.7, -438.06, -631.12, -858.48, -1420.02),
+                        "Suezmax_2": Velocity(0, 365.42, 515.38, 1461.69, 1892.72, -219.25, -283.91, -877.01, -1135.63)}
     list_cases_vel_osc = [1, 3, 4, 5]  # Velocidades com comportamento estranho
     list_buoys = [[Point(11722.4553, 5583.4462), Point(11771.3626, 5379.2566), Point(9189.9177, 4969.4907), Point(9237.9939, 4765.5281),
                    Point(6895.1451, 4417.3749), Point(6954.9285, 4225.9083), Point(5540.617, 4088.186), Point(5809.4056, 3767.7633)],
@@ -318,9 +320,11 @@ def main():
             if dt_paths[idx] == "Suape_Aframax/RT/" and (num_case in list_cases_vel_osc):
                 # Tratamento para velocidades oscilatorias em Aframax
                 ship_firstname = "Aframax_Osc"
+            elif dt_paths[idx] == "Suape_Aframax/RT/" and num_case == 11:
+                ship_firstname = "Suezmax_2"
 
             vel = ship_velocity.get(ship_firstname)
-            if vel is None:
+            if vel is None or ship_fullname == "Suezmax L280B50T17":
                 vel = ship_velocity.get(ship_fullname)
                 if vel is None:
                     err_control.eprint("Navio nao possui velocidade registrada - " + ship_fullname)
