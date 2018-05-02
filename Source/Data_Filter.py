@@ -201,16 +201,13 @@ def main():
     dt_num_case = [[1, 2, 3, 4, 5, 6, 9, 10, 12, 13, 14, 17, 18, 22, 23, 26, 28],  # Suape_2017/RT
                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],  # Suape_Aframax/RT
                    [1, 2, 3, 4],  # Suape_PDZ/FT/Outputs_FT
-                   [1, 2, 3, 4, 5, 6, 7, 9, 12, 13, 14, 15, 16, 17],  # Suape_PDZ/RT
-                   [1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 19]]  # Suape_PDZ/RT2
+                   [1, 2, 3, 4, 5, 9],  # Suape_PDZ/RT
+                   [1, 2]]  # Suape_PDZ/RT2
     dt_file_dict = [{"Suezmax": "smh_v00004", "Conteneiro": "smh_v00077", "Aframax": "smh_v00036"},  # Caso 28 do Suape_2017 tratado com excecao smh_v00030.txt - Conteneiro
                     {"Aframax": "smh_v00036", "Suezmax": "smh_v00037"},
                     {1: "smh_v00004_20170814_102039", 2: "smh_v00004_20170814_103220", 3: "smh_v00004_20170814_114251", 4: "smh_v00004_20170816_175923"},
-                    {1: "smh_v00037_20171009_093846", 2: "smh_v00037_20171009_101104", 3: "smh_v00037_20171009_104723", 4: "smh_v00037_20171009_112202", 5: "smh_v00028_20171009_135920", 6: "smh_v00028_20171009_154051",
-                     7: "smh_v00028_20171009_170521", 9: "smh_v00053_20171010_081234", 12: "smh_v00030_20171010_110500", 13: "smh_v00030_20171010_134312", 14: "smh_v00072_20171010_150159",
-                     15: "smh_v00072_20171010_154827", 16: "smh_v00025_20171010_165913", 17: "smh_v00025_20171010_181407"},
-                    {1: "smh_v00037_20171218_093301", 2: "smh_v00037_20171218_104020", 3: "smh_v00028_20171218_115245", 4: "smh_v00028_20171218_135301", 5: "smh_v00028_20171218_144630", 6: "smh_v00053_20171218_155203",
-                     8: "smh_v00053_20171219_091526", 9: "smh_v00030_20171219_100258", 11: "smh_v00030_20171219_111047", 12: "smh_v00030_20171219_132445", 19: "smh_v00030_20171220_105159"}]
+                    {1: "smh_v00037_20171009_093846", 2: "smh_v00037_20171009_101104", 3: "smh_v00037_20171009_104723", 4: "smh_v00037_20171009_112202", 5: "smh_v00028_20171009_135920", 9: "smh_v00053_20171010_081234"},
+                    {1: "smh_v00037_20171218_093301", 2: "smh_v00037_20171218_104020"}]
     dt_file_extension = ".txt"
     dt_out_path = "../Output/"
 
@@ -304,11 +301,13 @@ def main():
             list_paths = []
             for filep3d in os.listdir(dt_root + dt_paths[idx] + dt_pos_path + str(num_case)):
                 if filep3d.endswith(".p3d"):
-                    list_paths.append(os.path.join(dt_root + dt_paths[idx] + dt_pos_path + str(num_case), filep3d))
-            if len(list_paths) > 1:
+                    if not((dt_paths[idx] == "Suape_2017/RT/" and num_case == 4 and filep3d != "Suez_T172_2Reb_Suape.p3d") or
+                           (dt_paths[idx] == "Suape_PDZ/RT2/" and num_case == 3 and filep3d != "PDZ_CAPESIZE_L301B510T103_1reboc.p3d") or
+                           (dt_paths[idx] == "Suape_PDZ/RT2/" and num_case == 6 and filep3d != "PDZ_Cont_L333B48T143_1reboc.p3d")):
+                        list_paths.append(os.path.join(dt_root + dt_paths[idx] + dt_pos_path + str(num_case), filep3d))
+            if len(list_paths) != 1:
                 err_control.eprint("Multiplicidade de P3D")
             ship_dim = P3D_file(list_paths[len(list_paths)-1]).find_dimensions()  # Usa o ultimo P3D caso tenha multiplicidade
-
             # Cria o navio do teste
             if real_param[8] == "propeller_demanded_rpm_0":
                 ship_velocity = ship_velocity_rpm
@@ -322,14 +321,15 @@ def main():
                 ship_firstname = "Aframax_Osc"
             elif dt_paths[idx] == "Suape_Aframax/RT/" and num_case == 11:
                 ship_firstname = "Suezmax_2"
-
             vel = ship_velocity.get(ship_firstname)
-            if vel is None or ship_fullname == "Suezmax L280B50T17":
+            if dt_paths[idx] == "Suape_2017/RT/" and num_case == 28:
+                vel = ship_velocity.get("Conteneiro L366B51")
+            elif vel is None or ship_fullname == "Suezmax L280B50T17":
                 vel = ship_velocity.get(ship_fullname)
                 if vel is None:
                     err_control.eprint("Navio nao possui velocidade registrada - " + ship_fullname)
-                    vel = ship_velocity.get("Aframax")  # ************* REMOVER ISSO DEPOIS ****************
-            ship = Ship(ship_fullname, ship_dim, vel)  # ***** Talvez seja melhor mudar para fullname dependendo se o nome precisa bater inteiro ou nao *****
+                    vel = ship_velocity.get("Aframax")
+            ship = Ship(ship_fullname, ship_dim, vel)
 
             # Filtragem dos dados
             # Terceiro quadrante negativo para estar entrando no porto
