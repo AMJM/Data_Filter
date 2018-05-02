@@ -1,2 +1,0 @@
-﻿- Verificar comportamento com múltiplos p3d
-- Eliminar os casos muito curtos
