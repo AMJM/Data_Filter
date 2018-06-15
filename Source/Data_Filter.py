@@ -1,37 +1,93 @@
+'''
+Codigo para gerar os arquivos de treinamento da rede neural de controle de embarcoes em canais de acesso
+Ultima atualizacao: 15-06-2018 - Organizacao do codigo + comentarios
+'''
+
+'''
+Importacao das bibliotecas a serem utilizadas
+'''
 import pandas as pd
 import math as m
 import matplotlib.pyplot as plt
 import re
 import os
 
-err_control = None
+'''
+Variaveis globais
+'''
+err_control = None  # Contagem de erros na execucao
 
+
+'''
+Classe para suporte de arquivos .p3d
+'''
 class P3D_file:
+    # Construtor da classe
+    # Entrada:
+    #   path: string com o diretorio do arquivo p3d/nome do arquivo.p3d
+    # Saida:
+    #   None
     def __init__(self, path):
         self.path = path
 
+    # Metodo para extracao das dimensoes da embarcao do arquivo
+    # Entrada:
+    #   None
+    # Saida:
+    #   beam: largura da embarcacao
+    #   height: altura da embarcacao
+    #   length: comprimento da embarcacao
     def find_dimensions(self):
         global err_control
+
+        # Uso de regex para padrao dos parametros da embarcacao no arquivo p3d
         regex = re.compile("VESSEL[\s\S\n]*?(?<=BEAM = )(\d+.\d+)[\s\S\n]*?(?<=HEIGHT = )(\d+.\d+)[\s\S\n]*?(?<=LENGTH = )(\d+.\d+)")
         p3d_file = open(self.path)
         dim = regex.findall(p3d_file.read())
-        if len(dim[0]) != 3:
+
+        if len(dim[0]) != 3:  # Padrao de regex nao encontrado
             err_control.eprint("Dimensoes da embarcacao nao encontradas")
             return [-1, -1, -1]
-        else:
+        else:  # Separacao dos dados encontrados
             beam = float(dim[0][0])
             height = float(dim[0][1])
             length = float(dim[0][2])
             return beam, height, length
 
 
+'''
+Classe para definicao de um ponto em coordenadas cartesianas
+'''
 class Point:
+    # Construtor da classe
+    # Entrada:
+    #   x: coordenada x do ponto
+    #   y: coordenada y do ponto
+    # Saida:
+    #   None
     def __init__(self, x, y):
         self.x = x
         self.y = y
 
 
+'''
+Classe para suporte de velocidades das embarcacoes
+'''
 class Velocity:
+    # Construtor da classe
+    # Entrada:
+    #   stop: valor em rpm para comando de stop velocity
+    #   dead_slow: valor em rpm para comando de dead_slow velocity
+    #   slow: valor em rpm para comando de slow velocity
+    #   half: valor em rpm para comando de half velocity
+    #   full: valor em rpm para comando de full velocity
+    #   rdead_slow: valor em rpm para comando de dead_slow velocity reverso
+    #   rslow: valor em rpm para comando de slow velocity reverso
+    #   rhalf: valor em rpm para comando de half velocity reverso
+    #   rfull: valor em rpm para comando de full velocity reverso
+    #   Obs.: reverso padrao 0 -> mesmo valor em modulo que os correspondentes
+    # Saida:
+    #   None
     def __init__(self, stop, dead_slow, slow, half, full, rdead_slow = 0, rslow = 0, rhalf = 0, rfull = 0):
         self.stop = stop
         self.dead_slow = dead_slow
@@ -43,8 +99,12 @@ class Velocity:
         self.rhalf = rhalf if rhalf != 0 else -half
         self.rfull = rfull if rfull != 0 else -full
 
+    # Metodo para discretizar as velocidades nos respectivos comandos de maquina
+    # Entrada:
+    #   None
+    # Saida:
+    #   Vetor com os limites das velocidades dos comandos de maquina entre full reverso ate full
     def discrete_range(self):
-        # *************** Para fazer o teste, os limites estao grandes, mas e melhor usar fator 1.5 ***********************
         factor = 1.5
         v0 = self.rfull * factor
         v1 = (self.rhalf + self.rfull) / 2
@@ -58,6 +118,11 @@ class Velocity:
         v9 = self.full * factor
         return [v0, v1, v2, v3, v4, v5, v6, v7, v8, v9]
 
+    # Metodo para retornar o mapeamento de comando de maquina e velocidade correspondente
+    # Entrada:
+    #   idx: comando de maquina entre -4 ate 4
+    # Saida:
+    #   Valor correspondente em rpm
     def discrete_value(self, idx):
         global err_control
         if idx == -4:
@@ -78,13 +143,23 @@ class Velocity:
             val = self.half
         elif idx == 4:
             val = self.full
-        else:
+        else:  # Fora do range definido
             err_control.eprint("Velocidade discretizada incoerente")
 
         return val
 
 
-class Ship():
+'''
+Classe para suporte de embarcacoes
+'''
+class Ship:
+    # Construtor da classe
+    # Entrada:
+    #   name: nome da embarcacao
+    #   dim: vetor com as dimensoes da embarcacao - [beam height length]
+    #   velocity: objeto com as velocidades da embarcacao
+    # Saida:
+    #   None
     def __init__(self, name, dim, velocity):
         self.name = name
         self.beam = dim[0]
@@ -92,12 +167,32 @@ class Ship():
         self.length = dim[2]
         self.velocity = velocity
 
+    # Metodo para retornar os limites de cada ordem de maquina
+    # Entrada:
+    #   None
+    # Saida:
+    #   Vetor com os limites das velocidades dos comandos de maquina entre full reverso ate full
     def discrete_velocity(self):
         return self.velocity.discrete_range()
 
+    # Metodo para retornar o mapeamento de comando de maquina e velocidade correspondente
+    # Entrada:
+    #   idx: comando de maquina entre -4 ate 4
+    # Saida:
+    #   Valor correspondente em rpm
     def corresp_vel(self, idx):
         return self.velocity.discrete_value(idx)
 
+    # Metodo para calculo de distancias da embarcacao ate as margens e target
+    # Entrada:
+    #   center: coordenada cartesiana do centro da embarcacao
+    #   angle: angulo de aproamento da embarcacao em graus
+    #   buoys: vetor com as posicoes das boias
+    #   target: coordenada cartesiana do target
+    # Saida:
+    #   dpb: distancia a bombordo
+    #   dsb: distancia a borest
+    #   dtg: distancia ao target
     def calc_dist(self, center, angle, buoys, target):
         global err_control
         # Coordenadas medias frontal e traseira
@@ -132,6 +227,12 @@ class Ship():
 
         return pd.Series([dpb, dsb, dtg])
 
+    # Metodo para definicao entre quais boias esta a embarcacao
+    # Entrada:
+    #   point: coordenada cartesiana do ponto a ser verificado
+    #   buoys: vetor com as posicoes das boias
+    # Saida:
+    #   Valor que representa qual porcao do canal esta com referencia da entrada para a saida
     def _determine_section(self, point, buoys):
         for i in range(0, len(buoys), 2):
             if point.x < (buoys[len(buoys) - i - 1].x + buoys[len(buoys) - i - 2].x) / 2:
@@ -141,8 +242,14 @@ class Ship():
                     return len(buoys) - i - 2
         return len(buoys) - i - 2
 
+    # Metodo para definicao da direcao da embarcacao em relacao a linha media
+    # Entrada:
+    #   section_front: porcao do canal em que a embarcacao esta
+    #   angle: angulo de aproamento em graus
+    #   buoys: vetor com as posicoes das boias
+    # Saida:
+    #   -1 para bombordo, 0 na mesma direcao e 1 para estibordo
     def _determine_direction(self, section_front, angle, buoys):
-        # -1 para bombordo, 0 na mesma direcao e 1 para estibordo
         ini = Point((buoys[section_front].x + buoys[section_front + 1].x) / 2, (buoys[section_front].y + buoys[section_front + 1].y) / 2)
         end = Point((buoys[section_front + 2].x + buoys[section_front + 3].x) / 2, (buoys[section_front + 2].y + buoys[section_front + 3].y) / 2)
         line_angle = m.degrees(m.atan((end.y - ini.y) / (end.x - ini.x))) - 180
@@ -154,6 +261,14 @@ class Ship():
         else:
             return -1
 
+    # Metodo para calculo de distancia entre linha e ponto
+    # Entrada:
+    #   line_p_1: coordenadas do primeiro ponto que define a linha
+    #   line_p_1: coordenadas do segundo ponto que define a linha
+    #   point: coordenadas do ponto de interesse
+    #   type: -1 para relacao estibordo e 1 para relacao bombordo
+    # Saida:
+    #   Distancia do ponto a linha
     def _dist_line_point(self, line_p_1, line_p_2, point, type):
         # type 1 bombordo e -1 estibordo
         y_diff = line_p_2.y - line_p_1.y
@@ -166,30 +281,68 @@ class Ship():
 
         return factor * abs(y_diff * point.x - x_diff * point.y + line_p_2.x * line_p_1.y - line_p_2.y * line_p_1.x) / m.sqrt(y_diff ** 2 + x_diff ** 2)
 
+    # Metodo para calculo de distancia entre linha e ponto
+    # Entrada:
+    #   p1: coordenadas do primeiro ponto
+    #   p2: coordenadas do segundo ponto
+    #   type: -1 para relacao estibordo e 1 para relacao bombordo
+    # Saida:
+    #   Distancia entre os pontos
     def _dist_point_point(self, p1, p2):
         return m.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
 
 
+'''
+Classe para suporte de controle de erros
+'''
 class ErrorPrint:
+    # Construtor da classe
+    # Entrada:
+    #   None
+    # Saida:
+    #   None
     def __init__(self):
         self.count_error = 0
         self.global_error = 0
 
+    # Padrao de impressao de erro
+    # Entrada:
+    #   text: mensagem de erro
+    # Saida:
+    #   None
     def eprint(self, text):
         print("\t\t*** ERRO: " + text + " ***")
         self.count_error = self.count_error + 1
         self.global_error = self.global_error + 1
 
+    # Reset da contagem de erro
+    # Entrada:
+    #   None
+    # Saida:
+    #   None
     def reset(self):
         self.count_error = 0
 
+    # Contagem de erros locais
+    # Entrada:
+    #   None
+    # Saida:
+    #   Quantidade de erros
     def get_num_error(self):
         return self.count_error
 
+    # Contagem de erros globais
+    # Entrada:
+    #   None
+    # Saida:
+    #   Quantidade de erros
     def get_num_global_error(self):
         return self.global_error
 
 
+'''
+Metodo principal
+'''
 def main():
     # Para adicionar nova pasta do dropbox: adicionar o diretorio dos casos em dt_paths, o nome do arquivo com as informacoes dos casos em dt_cases,
     # uma lista dos casos a serem testados em dt_num_case e os arquivos de leitura de cada caso em dt_file_dict
@@ -367,21 +520,32 @@ def main():
             f.close()
 
             # plt.interactive(True)
-            df.plot(x='time_stamp', y=real_param[8])
+            fig = df.plot(x='time_stamp', y=real_param[8], legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="Máquina(-)", title='Comando de Máquina')
             # plt.ioff()
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/propeller.png")
             # plt.show()
-            df.plot(x='time_stamp', y='distance_port')
+
+            fig = df.plot(x='time_stamp', y='distance_port', legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância da margem a bombordo')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_port.png")
-            df.plot(x='time_stamp', y='distance_starboard')
+
+            fig = df.plot(x='time_stamp', y='distance_starboard', legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância da margem a boreste')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_star.png")
-            df.plot(x='time_stamp', y='distance_target')
+
+            fig = df.plot(x='time_stamp', y='distance_target', legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância ao final do canal')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_target.png")
-            df.plot(x='time_stamp', y='rudder_demanded_orientation_0')
+
+            fig = df.plot(x='time_stamp', y='rudder_demanded_orientation_0', legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="Ângulo(º)", title='Comando de leme')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/rudder.png")
+
             ax = df.plot(x='time_stamp', y='original_propeller')
             df.plot(x='time_stamp', y='discrete_propeller', ax=ax)
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/original_discrete_propeller.png")
+
             plt.close("all")
 
             df.to_csv(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, mode='a', index=False, sep=' ')  # , mode='a', index=False, sep=' ')
@@ -397,6 +561,7 @@ def main():
 
 
 main()
+
 
 #################################################################
 # Codigo auxiliar no matlab para comparar a posicao das boias
