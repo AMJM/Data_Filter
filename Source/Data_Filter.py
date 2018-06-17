@@ -556,7 +556,7 @@ def main():
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_target.png")
 
             fig = df.plot(x='time_stamp', y='rudder_demanded_orientation_0', legend=False)
-            fig.set(xlabel="Tempo(s)", ylabel="Ângulo(º)", title='Comando de leme')
+            fig.set(xlabel="Tempo(s)", ylabel="Ângulo(rad)", title='Comando de leme')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/rudder.png")
 
             ax = df.plot(x='time_stamp', y='original_propeller')
