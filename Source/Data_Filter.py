@@ -1,5 +1,5 @@
 '''
-Codigo para gerar os arquivos de treinamento da rede neural de controle de embarcoes em canais de acesso
+Codigo para gerar os arquivos de treinamento da rede neural de controle de embarcacoes em canais de acesso
 Ultima atualizacao: 15-06-2018 - Organizacao do codigo + comentarios
 '''
 
@@ -99,7 +99,7 @@ class Velocity:
         self.rhalf = rhalf if rhalf != 0 else -half
         self.rfull = rfull if rfull != 0 else -full
 
-    # Metodo para discretizar as velocidades nos respectivos comandos de maquina
+    # Metodo para definir os limites das velocidades nos respectivos comandos de maquina
     # Entrada:
     #   None
     # Saida:
@@ -167,7 +167,7 @@ class Ship:
         self.length = dim[2]
         self.velocity = velocity
 
-    # Metodo para retornar os limites de cada ordem de maquina
+    # Metodo para definir os limites das velocidades nos respectivos comandos de maquina
     # Entrada:
     #   None
     # Saida:
@@ -187,7 +187,7 @@ class Ship:
     # Entrada:
     #   center: coordenada cartesiana do centro da embarcacao
     #   angle: angulo de aproamento da embarcacao em graus
-    #   buoys: vetor com as posicoes das boias
+    #   buoys: vetor com as posicoes das boias aos pares
     #   target: coordenada cartesiana do target
     # Saida:
     #   dpb: distancia a bombordo
@@ -198,14 +198,18 @@ class Ship:
         # Coordenadas medias frontal e traseira
         front = Point(center.x + self.length / 2 * m.cos(m.radians(angle)), center.y + self.beam / 2 * m.sin(m.radians(angle)))
         back = Point(center.x - self.length / 2 * m.cos(m.radians(angle)), center.y - self.beam / 2 * m.sin(m.radians(angle)))
+
+        # Coordenadas dos vertices - considera a embarcacao um retangulo
         front_sb = Point(center.x + self.length / 2 * m.cos(m.radians(angle)) + self.beam / 2 * m.sin(m.radians(angle)), center.y + self.length / 2 * m.sin(m.radians(angle)) - self.beam / 2 * m.cos(m.radians(angle)))
         front_pb = Point(center.x + self.length / 2 * m.cos(m.radians(angle)) - self.beam / 2 * m.sin(m.radians(angle)), center.y + self.length / 2 * m.sin(m.radians(angle)) + self.beam / 2 * m.cos(m.radians(angle)))
         back_sb = Point(center.x - self.length / 2 * m.cos(m.radians(angle)) + self.beam / 2 * m.sin(m.radians(angle)), center.y - self.length / 2 * m.sin(m.radians(angle)) - self.beam / 2 * m.cos(m.radians(angle)))
         back_pb = Point(center.x - self.length / 2 * m.cos(m.radians(angle)) - self.beam / 2 * m.sin(m.radians(angle)), center.y - self.length / 2 * m.sin(m.radians(angle)) + self.beam / 2 * m.cos(m.radians(angle)))
 
+        # Determina em qual secao de boias esta o ponto medio frontal e traseiro
         section_front = self._determine_section(front, buoys)
         section_back = self._determine_section(back, buoys)
 
+        # Determina a direcao da embarcacao em relacao a linha media
         direction = self._determine_direction(section_front, angle, buoys)
 
         if direction == -1:  # virado a bombordo
@@ -222,6 +226,7 @@ class Ship:
         dpb = self._dist_line_point(buoys[section_pb + 1], buoys[section_pb + 3], sh_pb, 1)  # distancia bombordo
         dtg = self._dist_point_point(center, target)  # distancia target
 
+        # Embarcacao contrario a entrada no canal
         if ~((angle % 360 > 135) and (angle % 360 < 315)):
             err_control.eprint("Direcao da embarcacao em saida")
 
@@ -235,6 +240,7 @@ class Ship:
     #   Valor que representa qual porcao do canal esta com referencia da entrada para a saida
     def _determine_section(self, point, buoys):
         for i in range(0, len(buoys), 2):
+            # Verifica se passou de cada limite de boia
             if point.x < (buoys[len(buoys) - i - 1].x + buoys[len(buoys) - i - 2].x) / 2:
                 if len(buoys) - i - 2 == len(buoys) - 2:
                     return len(buoys) - i - 4  # Desconsidera se passa do target
@@ -250,10 +256,12 @@ class Ship:
     # Saida:
     #   -1 para bombordo, 0 na mesma direcao e 1 para estibordo
     def _determine_direction(self, section_front, angle, buoys):
+        # Define a direcao da linha media
         ini = Point((buoys[section_front].x + buoys[section_front + 1].x) / 2, (buoys[section_front].y + buoys[section_front + 1].y) / 2)
         end = Point((buoys[section_front + 2].x + buoys[section_front + 3].x) / 2, (buoys[section_front + 2].y + buoys[section_front + 3].y) / 2)
         line_angle = m.degrees(m.atan((end.y - ini.y) / (end.x - ini.x))) - 180
 
+        # Compara a embarcacao com a linha media
         if line_angle - angle > 0:
             return 1
         elif line_angle - angle == 0:
@@ -270,12 +278,13 @@ class Ship:
     # Saida:
     #   Distancia do ponto a linha
     def _dist_line_point(self, line_p_1, line_p_2, point, type):
-        # type 1 bombordo e -1 estibordo
+        # Define a linha por dois pontos
         y_diff = line_p_2.y - line_p_1.y
         x_diff = line_p_2.x - line_p_1.x
-
-        factor = 1
         y_line = y_diff / x_diff * (point.x - line_p_1.x) + line_p_1.y
+
+        # Fator para verificar se passou do canal (linha)
+        factor = 1
         if (y_line > point.y and type == 1) or (y_line < point.y and type == -1):
             factor = -1
 
@@ -315,7 +324,7 @@ class ErrorPrint:
         self.count_error = self.count_error + 1
         self.global_error = self.global_error + 1
 
-    # Reset da contagem de erro
+    # Reset da contagem de erro do arquivo
     # Entrada:
     #   None
     # Saida:
@@ -323,7 +332,7 @@ class ErrorPrint:
     def reset(self):
         self.count_error = 0
 
-    # Contagem de erros locais
+    # Contagem de erros do arquivo
     # Entrada:
     #   None
     # Saida:
@@ -344,6 +353,7 @@ class ErrorPrint:
 Metodo principal
 '''
 def main():
+    # Intrucoes de uso para novos arquivos
     # Para adicionar nova pasta do dropbox: adicionar o diretorio dos casos em dt_paths, o nome do arquivo com as informacoes dos casos em dt_cases,
     # uma lista dos casos a serem testados em dt_num_case e os arquivos de leitura de cada caso em dt_file_dict
     # Verificar tambem se sera necessario alterar o nome das colunas em param, adicionar velocidades de embarcacoes em ship_velocity e o ponto das boias e do target em list_buoys e list_target
@@ -434,17 +444,20 @@ def main():
             df = pd.read_csv(path_case, escapechar="%", skiprows=2, delim_whitespace=True)
             df.rename(columns=lambda x: x.strip(), inplace=True)
 
+            # Adaptacao para colunas ligeiramente diferentes em Aframax/RT
             if dt_paths[idx] == "Suape_Aframax/RT/":
                 real_param = param[1]
             else:
                 real_param = param[0]
             df = df[real_param]
 
-            # ***** Implementar selecao de boias e target *****
+            # Selecao de boias
             if len(list_buoys) - 1 < idx:
                 err_control.eprint("Posicao das boias inexistente")
             else:
                 buoys = list_buoys[idx]
+
+            # Selecao de target
             if len(list_target) - 1 < idx:
                 err_control.eprint("Posicao do target inexistente")
             else:
@@ -461,7 +474,9 @@ def main():
             if len(list_paths) != 1:
                 err_control.eprint("Multiplicidade de P3D")
             ship_dim = P3D_file(list_paths[len(list_paths)-1]).find_dimensions()  # Usa o ultimo P3D caso tenha multiplicidade
+
             # Cria o navio do teste
+            # Seleciona o vetor com o conjunto de velocidades
             if real_param[8] == "propeller_demanded_rpm_0":
                 ship_velocity = ship_velocity_rpm
             elif real_param[8] == "propeller_demanded_0":
@@ -469,6 +484,7 @@ def main():
             else:
                 err_control("Parametro de velocidade nao definido")
 
+            # Seleciona o vetor de velocidades da embarcacao
             if dt_paths[idx] == "Suape_Aframax/RT/" and (num_case in list_cases_vel_osc):
                 # Tratamento para velocidades oscilatorias em Aframax
                 ship_firstname = "Aframax_Osc"
@@ -502,7 +518,7 @@ def main():
             df["discrete_propeller"] = df.apply(lambda x: ship.corresp_vel(x[real_param[8]]), axis=1)
             df = df.round({"distance_port": 3, "distance_starboard": 3, "distance_target": 3})
 
-            # Gera a saida
+            # Gera o arquivo de treinamento apropriado com cabecalho que define os parametros da simulacao
             if not os.path.exists(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case)):
                 os.makedirs(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case))
             f = open(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, "w+")
@@ -519,6 +535,7 @@ def main():
             f.write("\r\n")
             f.close()
 
+            # Plotagem dos graficos e salva em .png
             # plt.interactive(True)
             fig = df.plot(x='time_stamp', y=real_param[8], legend=False)
             fig.set(xlabel="Tempo(s)", ylabel="Máquina(-)", title='Comando de Máquina')
@@ -548,31 +565,18 @@ def main():
 
             plt.close("all")
 
-            df.to_csv(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, mode='a', index=False, sep=' ')  # , mode='a', index=False, sep=' ')
+            # Escreve o resto do arquivo com os dados de treinamento
+            df.to_csv(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, mode='a', index=False, sep=' ')
 
+            # Imprime o log de erro
             if err_control.get_num_error() == 0:
                 print("\t\tOK: Sem erro de execucao")
             else:
                 print("\t\tDiretorio do teste: " + dt_root + dt_paths[idx] + dt_pos_path + str(num_case))
 
+    # Conclui o processamento
     print("\n*** Processamento concluido! ***")
     print("Quantidade total de erros encontrados: " + str(err_control.get_num_global_error()))
 
 
-
 main()
-
-
-#################################################################
-# Codigo auxiliar no matlab para comparar a posicao das boias
-# i=1
-# sceneConfig(i,'Dome')
-# load(strcat('.\Caso',num2str(i),'\cases.mat'))
-# for i = 1:11
-# if def_buoy(i).x ~= buoy(i).x || def_buoy(i).y ~= buoy(i).y
-# disp('ERRO')
-# end
-# end
-#
-# Na primeira: def_buoy = buoy
-#################################################################
