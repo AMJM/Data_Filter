@@ -482,7 +482,7 @@ def main():
             elif real_param[8] == "propeller_demanded_0":
                 ship_velocity = ship_velocity_kn
             else:
-                err_control("Parametro de velocidade nao definido")
+                err_control.eprint("Parametro de velocidade nao definido")
 
             # Seleciona o vetor de velocidades da embarcacao
             if dt_paths[idx] == "Suape_Aframax/RT/" and (num_case in list_cases_vel_osc):
@@ -538,7 +538,7 @@ def main():
             # Plotagem dos graficos e salva em .png
             # plt.interactive(True)
             fig = df.plot(x='time_stamp', y=real_param[8], legend=False)
-            fig.set(xlabel="Tempo(s)", ylabel="Máquina(-)", title='Comando de Máquina')
+            fig.set(xlabel="Tempo(s)", ylabel="Máquina(-)", title='Comando de máquina')
             # plt.ioff()
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/propeller.png")
             # plt.show()
@@ -559,11 +559,14 @@ def main():
             fig.set(xlabel="Tempo(s)", ylabel="Ângulo(rad)", title='Comando de leme')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/rudder.png")
 
-            ax = df.plot(x='time_stamp', y='original_propeller')
-            df.plot(x='time_stamp', y='discrete_propeller', ax=ax)
-            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/original_discrete_propeller.png")
+            # ax = df.plot(x='time_stamp', y='original_propeller')
+            # df.plot(x='time_stamp', y='discrete_propeller', ax=ax)
+            # plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/original_discrete_propeller.png")
 
             plt.close("all")
+
+            # Remove colunas auxiliares
+            df.drop(columns=[real_param[8], 'original_propeller'], inplace=True)
 
             # Escreve o resto do arquivo com os dados de treinamento
             df.to_csv(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, mode='a', index=False, sep=' ')
