@@ -620,7 +620,7 @@ def main():
             plt.close("all")
 
             # Remove colunas auxiliares
-            df.drop(columns=['original_propeller', 'discrete_propeller', 'time_stamp'], inplace=True)
+            df.drop(columns=['original_propeller', 'discrete_propeller', 'time_stamp', 'x', 'y'], inplace=True)
 
             # Renomeia as colunas
             df.rename(index=str, columns={real_param[8]: "propeller_demanded", "rudder_demanded_orientation_0": "rudder_demanded"}, inplace=True)
