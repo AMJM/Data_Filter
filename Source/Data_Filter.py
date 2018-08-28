@@ -193,7 +193,7 @@ class Ship:
     #   dpb: distancia a bombordo
     #   dsb: distancia a borest
     #   dtg: distancia ao target
-    def calc_dist(self, center, angle, buoys, target):
+    def calc_dist_lateral(self, center, angle, buoys, target):
         global err_control
         # Coordenadas medias frontal e traseira
         front = Point(center.x + self.length / 2 * m.cos(m.radians(angle)), center.y + self.beam / 2 * m.sin(m.radians(angle)))
@@ -231,6 +231,30 @@ class Ship:
             err_control.eprint("Direcao da embarcacao em saida")
 
         return pd.Series([dpb, dsb, dtg])
+
+        # Metodo para calculo de distancias da embarcacao ate a linha central e target
+        # Entrada:
+        #   center: coordenada cartesiana do centro da embarcacao
+        #   angle: angulo de aproamento da embarcacao em graus
+        #   buoys: vetor com as posicoes das boias aos pares
+        #   target: coordenada cartesiana do target
+        # Saida:
+        #   dml: distancia a bombordo
+        #   dtg: distancia ao target
+        def calc_dist_midline(self, center, angle, buoys, target):
+            global err_control
+
+            # Determina em qual secao de boias esta o ponto medio frontal e traseiro
+            section = self._determine_section(center, buoys)
+
+            dml = self._dist_line_point(buoys[section + 1], buoys[section + 3], center, 1)  # distancia central
+            dtg = self._dist_point_point(center, target)  # distancia target
+
+            # Embarcacao contrario a entrada no canal
+            if ~((angle % 360 > 135) and (angle % 360 < 315)):
+                err_control.eprint("Direcao da embarcacao em saida")
+
+            return pd.Series([dml, dtg])
 
     # Metodo para definicao entre quais boias esta a embarcacao
     # Entrada:
@@ -353,6 +377,9 @@ class ErrorPrint:
 Metodo principal
 '''
 def main():
+    # Flag para definir se gera dados por distancia bombordo e boreste ou por linha central
+    flag_lateral = True
+
     # Intrucoes de uso para novos arquivos
     # Para adicionar nova pasta do dropbox: adicionar o diretorio dos casos em dt_paths, o nome do arquivo com as informacoes dos casos em dt_cases,
     # uma lista dos casos a serem testados em dt_num_case e os arquivos de leitura de cada caso em dt_file_dict
@@ -373,6 +400,7 @@ def main():
                     {1: "smh_v00037_20171218_093301", 2: "smh_v00037_20171218_104020"}]
     dt_file_extension = ".txt"
     dt_out_path = "../Output/"
+    dt_out_path_compiled = "../Output/Compilado/"
 
     vel_label = [-4, -3, -2, -1, 0, 1, 2, 3, 4]  # 0 parado, 1 muito devagar, 2 devagar, 3 meia forca e 4 toda forca e seus respectivos opostos na outra direcao
     param = [["time_stamp", "x", "y", "zz", "vx", "vy", "vzz", "rudder_demanded_orientation_0", "propeller_demanded_rpm_0"],
@@ -410,6 +438,7 @@ def main():
                    Point(7200.3366, 4321.1497),
                    Point(7213.6943, 4380.5586)]
     global err_control
+    case_global_count = 0
     err_control = ErrorPrint()
 
     for idx in range(0, len(dt_paths)):
@@ -428,6 +457,7 @@ def main():
 
         # Itera pelos casos selecionados em cada pasta
         for num_case in dt_num_case[idx]:
+            case_global_count = case_global_count + 1
             err_control.reset()
             print("\tGerando caso " + str(num_case) + "...")
 
@@ -511,29 +541,48 @@ def main():
             df.drop(df[((df["x"] > x_ini) | (df["y"] > y_ini) | (df["x"] < x_end) | (df["y"] < y_end))].index, inplace=True)
 
             # Calcula as distancias e discretiza a velocidade
-            df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x: ship.calc_dist(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
+            if flag_lateral == True:
+                df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x: ship.calc_dist_lateral(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
+            else:
+                df[["distance_midline", "distance_target"]] = df.apply(lambda x: ship.calc_dist_midline(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
             df["original_propeller"] = df[real_param[8]]
             df[real_param[8]] = pd.cut(df[real_param[8]], ship.discrete_velocity(), right=False, labels=vel_label)
             df[real_param[8]] = df.apply(lambda x: int(x[real_param[8]]), axis=1)
             df["discrete_propeller"] = df.apply(lambda x: ship.corresp_vel(x[real_param[8]]), axis=1)
-            df = df.round({"distance_port": 3, "distance_starboard": 3, "distance_target": 3})
+            if flag_lateral == True:
+                df = df.round({"distance_port": 3, "distance_starboard": 3, "distance_target": 3})
+            else:
+                df = df.round({"distance_midline": 3, "distance_target": 3})
 
             # Gera o arquivo de treinamento apropriado com cabecalho que define os parametros da simulacao
             if not os.path.exists(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case)):
                 os.makedirs(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case))
+            if not os.path.exists(dt_out_path_compiled):
+                os.makedirs(dt_out_path_compiled)
             f = open(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, "w+")
+            if case_global_count < 10:
+                str_case_num = "0" + str(case_global_count)
+            else:
+                str_case_num = str(case_global_count)
+            f_comp = open(dt_out_path_compiled + "Caso" + str_case_num + dt_file_extension, "w+")
             for p in simul_data:
                 check = mult_param_data.get(p)
                 if check is None:
                     f.write(p + ": " + df_case[df_case["Caso"] == num_case][p].to_string(index=False) + "\r\n")
+                    f_comp.write(p + ": " + df_case[df_case["Caso"] == num_case][p].to_string(index=False) + "\r\n")
                 else:
                     pos = df_case.columns.get_loc(p)
                     f.write(p + ": ")
+                    f_comp.write(p + ": ")
                     for i in range(0, check):
                         f.write(df_case[df_case["Caso"] == num_case].iloc[0, pos + i] + " ")
+                        f_comp.write(df_case[df_case["Caso"] == num_case].iloc[0, pos + i] + " ")
                     f.write("\r\n")
+                    f_comp.write("\r\n")
             f.write("\r\n")
+            f_comp.write("\r\n")
             f.close()
+            f_comp.close()
 
             # Plotagem dos graficos e salva em .png
             # plt.interactive(True)
@@ -543,13 +592,18 @@ def main():
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/propeller.png")
             # plt.show()
 
-            fig = df.plot(x='time_stamp', y='distance_port', legend=False)
-            fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância da margem a bombordo')
-            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_port.png")
+            if flag_lateral == True:
+                fig = df.plot(x='time_stamp', y='distance_port', legend=False)
+                fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância da margem a bombordo')
+                plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_port.png")
 
-            fig = df.plot(x='time_stamp', y='distance_starboard', legend=False)
-            fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância da margem a boreste')
-            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_star.png")
+                fig = df.plot(x='time_stamp', y='distance_starboard', legend=False)
+                fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância da margem a boreste')
+                plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_star.png")
+            else:
+                fig = df.plot(x='time_stamp', y='distance_midline', legend=False)
+                fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância da linha central')
+                plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/dist_mid.png")
 
             fig = df.plot(x='time_stamp', y='distance_target', legend=False)
             fig.set(xlabel="Tempo(s)", ylabel="Distância(m)", title='Distância ao final do canal')
@@ -566,10 +620,14 @@ def main():
             plt.close("all")
 
             # Remove colunas auxiliares
-            df.drop(columns=[real_param[8], 'original_propeller'], inplace=True)
+            df.drop(columns=['original_propeller', 'discrete_propeller', 'time_stamp'], inplace=True)
+
+            # Renomeia as colunas
+            df.rename(index=str, columns={real_param[8]: "propeller_demanded", "rudder_demanded_orientation_0": "rudder_demanded"}, inplace=True)
 
             # Escreve o resto do arquivo com os dados de treinamento
             df.to_csv(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/" + file + dt_file_extension, mode='a', index=False, sep=' ')
+            df.to_csv(dt_out_path_compiled + "Caso" + str_case_num + dt_file_extension, mode='a', index=False, sep=' ')
 
             # Imprime o log de erro
             if err_control.get_num_error() == 0:
