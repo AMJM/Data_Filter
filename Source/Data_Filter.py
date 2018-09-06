@@ -232,29 +232,37 @@ class Ship:
 
         return pd.Series([dpb, dsb, dtg])
 
-        # Metodo para calculo de distancias da embarcacao ate a linha central e target
-        # Entrada:
-        #   center: coordenada cartesiana do centro da embarcacao
-        #   angle: angulo de aproamento da embarcacao em graus
-        #   buoys: vetor com as posicoes das boias aos pares
-        #   target: coordenada cartesiana do target
-        # Saida:
-        #   dml: distancia a bombordo
-        #   dtg: distancia ao target
-        def calc_dist_midline(self, center, angle, buoys, target):
-            global err_control
+    # Metodo para calculo de distancias da embarcacao ate a linha central e target
+    # Entrada:
+    #   center: coordenada cartesiana do centro da embarcacao
+    #   angle: angulo de aproamento da embarcacao em graus
+    #   buoys: vetor com as posicoes das boias aos pares
+    #   target: coordenada cartesiana do target
+    # Saida:
+    #   dml: distancia a bombordo
+    #   dtg: distancia ao target
+    def calc_dist_midline(self, center, angle, buoys, target):
+        global err_control
 
-            # Determina em qual secao de boias esta o ponto medio frontal e traseiro
-            section = self._determine_section(center, buoys)
+        # Determina em qual secao de boias esta o ponto medio frontal e traseiro
+        section = self._determine_section(center, buoys)
 
-            dml = self._dist_line_point(buoys[section + 1], buoys[section + 3], center, 1)  # distancia central
-            dtg = self._dist_point_point(center, target)  # distancia target
+        b1 = buoys[section]
+        b2 = buoys[section + 1]
+        p1 = Point((b1.x + b2.x)/2, (b1.y + b2.y)/2)
 
-            # Embarcacao contrario a entrada no canal
-            if ~((angle % 360 > 135) and (angle % 360 < 315)):
-                err_control.eprint("Direcao da embarcacao em saida")
+        b1 = buoys[section + 2]
+        b2 = buoys[section + 3]
+        p2 = Point((b1.x + b2.x) / 2, (b1.y + b2.y) / 2)
 
-            return pd.Series([dml, dtg])
+        dml = self._dist_line_point(p1, p2, center, 1)  # distancia central
+        dtg = self._dist_point_point(center, target)  # distancia target
+
+        # Embarcacao contrario a entrada no canal
+        if ~((angle % 360 > 135) and (angle % 360 < 315)):
+            err_control.eprint("Direcao da embarcacao em saida")
+
+        return pd.Series([dml, dtg])
 
     # Metodo para definicao entre quais boias esta a embarcacao
     # Entrada:
@@ -378,7 +386,7 @@ Metodo principal
 '''
 def main():
     # Flag para definir se gera dados por distancia bombordo e boreste ou por linha central
-    flag_lateral = True
+    flag_lateral = False
 
     # Intrucoes de uso para novos arquivos
     # Para adicionar nova pasta do dropbox: adicionar o diretorio dos casos em dt_paths, o nome do arquivo com as informacoes dos casos em dt_cases,
@@ -437,6 +445,12 @@ def main():
                    Point(6889.7808, 4312.0526),
                    Point(7200.3366, 4321.1497),
                    Point(7213.6943, 4380.5586)]
+
+    #list_target = [Point(7000.0, 4300.0),
+    #               Point(7000.0, 4300.0),
+    #               Point(7000.0, 4300.0),
+    #               Point(7000.0, 4300.0),
+    #               Point(7000.0, 4300.0)]
     global err_control
     case_global_count = 0
     err_control = ErrorPrint()
