@@ -68,6 +68,8 @@ class Point:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        self.mod = m.sqrt(x ** 2 + y ** 2)
+        self.angle = m.degrees(m.atan2(y, x))
 
 
 '''
@@ -264,6 +266,36 @@ class Ship:
 
         return pd.Series([dml, dtg])
 
+    # Metodo para calculo de cog (course over ground) e sog (speed over ground)
+    # Entrada:
+    #   angle: angulo de aproamento da embarcacao em graus
+    #   vx: velocidade surge (direção longitudinal da embarcação)
+    #   vy: velocidade sway (direção no eixo lateral da embarcação)
+    # Saida:
+    #   cog: angulo da velocidade total
+    #   sog: modulo da velocidade total
+    def calc_cog_sog(self, angle, vx, vy):
+        global err_control
+
+        # Determina em qual secao de boias esta o ponto medio frontal e traseiro
+        #section = self._determine_section(center, buoys)
+
+        #b1 = buoys[section]
+        #b2 = buoys[section + 1]
+        #p1 = Point((b1.x + b2.x) / 2, (b1.y + b2.y) / 2)
+
+        #b1 = buoys[section + 2]
+        #b2 = buoys[section + 3]
+        #p2 = Point((b1.x + b2.x) / 2, (b1.y + b2.y) / 2)
+
+        vec_vel = Point(vx, vy)
+        #channel_angle = self._angle_point_point(p1, p2)
+
+        cog = angle + vec_vel.angle
+        sog = vec_vel.mod
+
+        return pd.Series([cog, sog])
+
     # Metodo para definicao entre quais boias esta a embarcacao
     # Entrada:
     #   point: coordenada cartesiana do ponto a ser verificado
@@ -326,11 +358,19 @@ class Ship:
     # Entrada:
     #   p1: coordenadas do primeiro ponto
     #   p2: coordenadas do segundo ponto
-    #   type: -1 para relacao estibordo e 1 para relacao bombordo
     # Saida:
     #   Distancia entre os pontos
     def _dist_point_point(self, p1, p2):
         return m.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
+
+    # Metodo para calculo de angulo entre pontos
+    # Entrada:
+    #   p1: coordenadas do primeiro ponto
+    #   p2: coordenadas do segundo ponto
+    # Saida:
+    #   Angulo entre pontos
+    def _angle_point_point(self, p1, p2):
+        return m.degrees(m.atan2(p1.y - p2.y, p1.x - p2.x))
 
 
 '''
@@ -559,6 +599,7 @@ def main():
                 df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x: ship.calc_dist_lateral(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
             else:
                 df[["distance_midline", "distance_target"]] = df.apply(lambda x: ship.calc_dist_midline(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
+            df[["cog", "sog"]] = df.apply(lambda x: ship.calc_cog_sog(x["zz"], x["vx"], x["vy"]), axis=1)
             df["original_propeller"] = df[real_param[8]]
             df[real_param[8]] = pd.cut(df[real_param[8]], ship.discrete_velocity(), right=False, labels=vel_label)
             df[real_param[8]] = df.apply(lambda x: int(x[real_param[8]]), axis=1)
@@ -567,6 +608,7 @@ def main():
                 df = df.round({"distance_port": 3, "distance_starboard": 3, "distance_target": 3})
             else:
                 df = df.round({"distance_midline": 3, "distance_target": 3})
+            df = df.round({"cog": 3, "sog": 3})
 
             # Gera o arquivo de treinamento apropriado com cabecalho que define os parametros da simulacao
             if not os.path.exists(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case)):
@@ -627,6 +669,14 @@ def main():
             fig.set(xlabel="Tempo(s)", ylabel="Ângulo(rad)", title='Comando de leme')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/rudder.png")
 
+            fig = df.plot(x='time_stamp', y='cog', legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="Cog(º)", title='Course over ground')
+            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/cog.png")
+
+            fig = df.plot(x='time_stamp', y='sog', legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="sog(m/s)", title='Speed over ground')
+            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/sog.png")
+
             # ax = df.plot(x='time_stamp', y='original_propeller')
             # df.plot(x='time_stamp', y='discrete_propeller', ax=ax)
             # plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/original_discrete_propeller.png")
@@ -634,7 +684,7 @@ def main():
             plt.close("all")
 
             # Remove colunas auxiliares
-            df.drop(columns=['original_propeller', 'discrete_propeller', 'time_stamp', 'x', 'y'], inplace=True)
+            df.drop(columns=['original_propeller', 'discrete_propeller', 'x', 'y'], inplace=True)
 
             # Renomeia as colunas
             df.rename(index=str, columns={real_param[8]: "propeller_demanded", "rudder_demanded_orientation_0": "rudder_demanded"}, inplace=True)
