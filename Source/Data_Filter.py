@@ -274,27 +274,28 @@ class Ship:
     # Saida:
     #   cog: angulo da velocidade total
     #   sog: modulo da velocidade total
-    def calc_cog_sog(self, angle, vx, vy):
+    def calc_cog_sog(self, center, angle, buoys, vx, vy):
         global err_control
 
         # Determina em qual secao de boias esta o ponto medio frontal e traseiro
-        #section = self._determine_section(center, buoys)
+        section = self._determine_section(center, buoys)
 
-        #b1 = buoys[section]
-        #b2 = buoys[section + 1]
-        #p1 = Point((b1.x + b2.x) / 2, (b1.y + b2.y) / 2)
+        b1 = buoys[section]
+        b2 = buoys[section + 1]
+        p1 = Point((b1.x + b2.x) / 2, (b1.y + b2.y) / 2)
 
-        #b1 = buoys[section + 2]
-        #b2 = buoys[section + 3]
-        #p2 = Point((b1.x + b2.x) / 2, (b1.y + b2.y) / 2)
+        b1 = buoys[section + 2]
+        b2 = buoys[section + 3]
+        p2 = Point((b1.x + b2.x) / 2, (b1.y + b2.y) / 2)
 
         vec_vel = Point(vx, vy)
-        #channel_angle = self._angle_point_point(p1, p2)
+        channel_angle = self._angle_point_point(p1, p2)
 
         cog = angle + vec_vel.angle
         sog = vec_vel.mod
+        local_cog = channel_angle - cog
 
-        return pd.Series([cog, sog])
+        return pd.Series([cog, sog, local_cog])
 
     # Metodo para definicao entre quais boias esta a embarcacao
     # Entrada:
@@ -370,7 +371,7 @@ class Ship:
     # Saida:
     #   Angulo entre pontos
     def _angle_point_point(self, p1, p2):
-        return m.degrees(m.atan2(p1.y - p2.y, p1.x - p2.x))
+        return m.degrees(m.atan2(p2.y - p1.y, p2.x - p1.x))
 
 
 '''
@@ -587,6 +588,7 @@ def main():
             # Filtragem dos dados
             # Terceiro quadrante negativo para estar entrando no porto
             df = df[((df["zz"] % 360 > 135) & (df["zz"] % 360 < 315))]
+            df["zz"] = df["zz"].apply(lambda x: x - 360 if x > 0 else x)
             # Estar no meio dos pontos extremos para estar dentro do canal
             x_ini = buoys[1].x - ship.length / 2
             y_ini = buoys[0].y
@@ -599,7 +601,7 @@ def main():
                 df[["distance_port", "distance_starboard", "distance_target"]] = df.apply(lambda x: ship.calc_dist_lateral(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
             else:
                 df[["distance_midline", "distance_target"]] = df.apply(lambda x: ship.calc_dist_midline(Point(x["x"], x["y"]), x["zz"], buoys, target), axis=1)
-            df[["cog", "sog"]] = df.apply(lambda x: ship.calc_cog_sog(x["zz"], x["vx"], x["vy"]), axis=1)
+            df[["cog", "sog", "local_cog"]] = df.apply(lambda x: ship.calc_cog_sog(Point(x["x"], x["y"]), x["zz"], buoys, x["vx"], x["vy"]), axis=1)
             df["original_propeller"] = df[real_param[8]]
             df[real_param[8]] = pd.cut(df[real_param[8]], ship.discrete_velocity(), right=False, labels=vel_label)
             df[real_param[8]] = df.apply(lambda x: int(x[real_param[8]]), axis=1)
@@ -608,7 +610,7 @@ def main():
                 df = df.round({"distance_port": 3, "distance_starboard": 3, "distance_target": 3})
             else:
                 df = df.round({"distance_midline": 3, "distance_target": 3})
-            df = df.round({"cog": 3, "sog": 3})
+            df = df.round({"cog": 3, "sog": 3, "local_cog": 3})
 
             # Gera o arquivo de treinamento apropriado com cabecalho que define os parametros da simulacao
             if not os.path.exists(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case)):
@@ -676,6 +678,10 @@ def main():
             fig = df.plot(x='time_stamp', y='sog', legend=False)
             fig.set(xlabel="Tempo(s)", ylabel="sog(m/s)", title='Speed over ground')
             plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/sog.png")
+
+            fig = df.plot(x='time_stamp', y='local_cog', legend=False)
+            fig.set(xlabel="Tempo(s)", ylabel="Local Cog(º)", title='Course over ground - Local')
+            plt.savefig(dt_out_path + dt_paths[idx] + dt_pos_path + str(num_case) + "/local_cog.png")
 
             # ax = df.plot(x='time_stamp', y='original_propeller')
             # df.plot(x='time_stamp', y='discrete_propeller', ax=ax)
