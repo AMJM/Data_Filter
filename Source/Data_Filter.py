@@ -1,6 +1,6 @@
 '''
+[AKUM-18/12/2018]
 Codigo para gerar os arquivos de treinamento da rede neural de controle de embarcacoes em canais de acesso
-Ultima atualizacao: 15-06-2018 - Organizacao do codigo + comentarios
 '''
 
 '''
